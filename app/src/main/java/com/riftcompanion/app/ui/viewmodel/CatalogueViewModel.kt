@@ -37,7 +37,7 @@ class CatalogueViewModel @Inject constructor(
             card.identity.appSearchText.contains(search, ignoreCase = true) ||
                 card.expansionSlugs.any { it.contains(search, ignoreCase = true) } ||
                 card.rarities.any { it.contains(search, ignoreCase = true) }
-        }
+        }.sortedBy { it.identity.displayName.lowercase() }
         CatalogueUiState(
             cards = filtered,
             searchQuery = search,

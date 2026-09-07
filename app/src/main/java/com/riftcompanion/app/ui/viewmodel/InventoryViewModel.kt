@@ -70,7 +70,7 @@ class InventoryViewModel @Inject constructor(
                 (card.rarity?.contains(search, ignoreCase = true) == true)
 
             matchesLocation && matchesDomains && matchesSearch
-        }
+        }.sortedBy { it.identity.displayName.lowercase() }
 
         val totalCards = cards.sumOf { it.availability.totalOwned }
         val availableCards = cards.sumOf { it.availability.availableInStorage }
