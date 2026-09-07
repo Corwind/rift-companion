@@ -382,17 +382,17 @@ private fun DomainFilterTag(
             .clip(RoundedCornerShape(50))
             .background(color.copy(alpha = effectiveAlpha))
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 5.dp),
+            .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(6.dp)
+                .size(7.dp)
                 .clip(CircleShape)
                 .background(color.copy(alpha = if (selected) 1f else 0.4f)),
         )
         Text(
             text = domain,
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
             color = textColor,
         )
     }
