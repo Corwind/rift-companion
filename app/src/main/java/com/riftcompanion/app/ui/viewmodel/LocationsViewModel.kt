@@ -119,36 +119,59 @@ class LocationsViewModel @Inject constructor(
         val location = state.location ?: return
         if (state.name.isBlank()) return
 
+        // Determine if CardNexus-relevant fields changed
+        val remoteChanged = state.name != location.displayName ||
+            state.color != location.color ||
+            state.icon != location.icon
+
         viewModelScope.launch {
             _editState.value = state.copy(isSaving = true)
-            val result = repository.updateLocation(
-                currentName = location.displayName,
-                newName = state.name,
-                color = state.color,
-                icon = state.icon,
-            )
-            result.fold(
-                onSuccess = { updated ->
-                    // Update local policy
-                    repository.updateLocationPolicy(
-                        LocationPolicy(
-                            normalizedName = updated.normalizedName,
-                            displayName = updated.name,
-                            color = updated.color,
-                            icon = updated.icon,
-                            kind = state.kind,
-                            countsAsAvailable = state.kind == LocationKind.Storage,
-                            hidden = state.hidden,
-                        ),
-                    )
-                    _message.value = "Updated '${updated.name}' in CardNexus."
-                    _editState.value = LocationEditState()
-                },
-                onFailure = { error ->
-                    _editState.value = state.copy(isSaving = false)
-                    _message.value = "Location update failed: ${error.message}"
-                },
-            )
+
+            if (remoteChanged) {
+                // Update CardNexus (name, color, icon) then sync local policy
+                val result = repository.updateLocation(
+                    currentName = location.displayName,
+                    newName = state.name,
+                    color = state.color,
+                    icon = state.icon,
+                )
+                result.fold(
+                    onSuccess = { updated ->
+                        repository.updateLocationPolicy(
+                            LocationPolicy(
+                                normalizedName = updated.normalizedName,
+                                displayName = updated.name,
+                                color = updated.color,
+                                icon = updated.icon,
+                                kind = state.kind,
+                                countsAsAvailable = state.kind == LocationKind.Storage,
+                                hidden = state.hidden,
+                            ),
+                        )
+                        _message.value = "Updated '${updated.name}' in CardNexus."
+                        _editState.value = LocationEditState()
+                    },
+                    onFailure = { error ->
+                        _editState.value = state.copy(isSaving = false)
+                        _message.value = "Location update failed: ${error.message}"
+                    },
+                )
+            } else {
+                // Only local fields changed (kind, hidden) — no API call needed
+                repository.updateLocationPolicy(
+                    LocationPolicy(
+                        normalizedName = location.normalizedName,
+                        displayName = location.displayName,
+                        color = location.color,
+                        icon = location.icon,
+                        kind = state.kind,
+                        countsAsAvailable = state.kind == LocationKind.Storage,
+                        hidden = state.hidden,
+                    ),
+                )
+                _message.value = "Updated '${location.displayName}'."
+                _editState.value = LocationEditState()
+            }
         }
     }
 

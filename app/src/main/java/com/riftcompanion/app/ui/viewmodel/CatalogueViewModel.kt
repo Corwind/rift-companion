@@ -33,11 +33,11 @@ class CatalogueViewModel @Inject constructor(
         _searchQuery,
         _viewMode,
     ) { cards, search, viewMode ->
-        val filtered = if (search.isBlank()) cards else cards.filter { card ->
+        val filtered = (if (search.isBlank()) cards else cards.filter { card ->
             card.identity.appSearchText.contains(search, ignoreCase = true) ||
                 card.expansionSlugs.any { it.contains(search, ignoreCase = true) } ||
                 card.rarities.any { it.contains(search, ignoreCase = true) }
-        }.sortedBy { it.identity.displayName.lowercase() }
+        }).sortedBy { it.identity.displayName.lowercase() }
         CatalogueUiState(
             cards = filtered,
             searchQuery = search,
