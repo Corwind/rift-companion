@@ -105,4 +105,11 @@ dependencies {
     // Security
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.security.crypto)
+
+    // Test
+    testImplementation(libs.junit)
+    testImplementation(libs.mockk)
+    testImplementation(libs.turbine)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.kotlinx.serialization.json)
 }
