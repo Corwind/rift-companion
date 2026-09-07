@@ -146,7 +146,7 @@ fun SettingsScreen(
             SettingsCard("CardNexus Account", Icons.Default.Key) {
                 if (uiState.hasApiKey && !showApiKeyField) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF43A047))
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = com.riftcompanion.app.ui.theme.freeColor())
                         Spacer(Modifier.size(8.dp))
                         Text("API key stored", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                     }

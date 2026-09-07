@@ -442,7 +442,7 @@ private fun InventoryGridCard(card: InventoryCardSummary, onClick: () -> Unit) {
                 QuantityBadge(
                     title = "Free",
                     value = card.availability.availableInStorage,
-                    tint = androidx.compose.ui.graphics.Color(0xFF43A047),
+                    tint = com.riftcompanion.app.ui.theme.freeColor(),
                 )
             }
         }
@@ -498,7 +498,7 @@ private fun InventoryListRow(card: InventoryCardSummary, onClick: () -> Unit) {
                 Text(
                     text = "${card.availability.availableInStorage} free",
                     style = MaterialTheme.typography.labelSmall,
-                    color = androidx.compose.ui.graphics.Color(0xFF43A047),
+                    color = com.riftcompanion.app.ui.theme.freeColor(),
                 )
             }
             Spacer(Modifier.width(4.dp))

@@ -146,7 +146,7 @@ fun LocationsScreen(
                             modifier = Modifier.padding(14.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                            SummaryChip(Icons.Default.Inventory2, "$storageCount", "Storage", Color(0xFF43A047))
+                            SummaryChip(Icons.Default.Inventory2, "$storageCount", "Storage", com.riftcompanion.app.ui.theme.freeColor())
                             SummaryChip(Icons.Default.Style, "$deckCount", "Decks", MaterialTheme.colorScheme.primary)
                             SummaryChip(Icons.Default.Block, "$unavailCount", "Unavailable", MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -256,7 +256,7 @@ private fun LocationRow(
                     LocationKind.Unavailable -> Icons.Default.Block
                 },
                 contentDescription = null,
-                tint = if (location.kind == LocationKind.Storage) Color(0xFF43A047)
+                tint = if (location.kind == LocationKind.Storage) com.riftcompanion.app.ui.theme.freeColor()
                     else MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.width(12.dp))

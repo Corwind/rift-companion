@@ -194,10 +194,10 @@ fun CardDetailScreen(
                 card.availability?.let { avail ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         QuantityBadge(title = "Total", value = avail.totalOwned)
-                        QuantityBadge(title = "Free", value = avail.availableInStorage, tint = androidx.compose.ui.graphics.Color(0xFF43A047))
+                        QuantityBadge(title = "Free", value = avail.availableInStorage, tint = com.riftcompanion.app.ui.theme.freeColor())
                         val used = avail.inTargetDeck + avail.inOtherDecks
-                        if (used > 0) QuantityBadge(title = "Used", value = used, tint = androidx.compose.ui.graphics.Color(0xFFFB8C00))
-                        if (avail.otherwiseUnavailable > 0) QuantityBadge(title = "Unavailable", value = avail.otherwiseUnavailable, tint = androidx.compose.ui.graphics.Color(0xFFFB8C00))
+                        if (used > 0) QuantityBadge(title = "Used", value = used, tint = com.riftcompanion.app.ui.theme.usedColor())
+                        if (avail.otherwiseUnavailable > 0) QuantityBadge(title = "Unavailable", value = avail.otherwiseUnavailable, tint = com.riftcompanion.app.ui.theme.usedColor())
                     }
                     Spacer(Modifier.height(20.dp))
                 }
@@ -217,7 +217,7 @@ fun CardDetailScreen(
                                         else -> Icons.Default.Block
                                     },
                                     contentDescription = null,
-                                    tint = if (location.isAvailable) androidx.compose.ui.graphics.Color(0xFF43A047) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = if (location.isAvailable) com.riftcompanion.app.ui.theme.freeColor() else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(18.dp),
                                 )
                                 Spacer(Modifier.width(8.dp))
