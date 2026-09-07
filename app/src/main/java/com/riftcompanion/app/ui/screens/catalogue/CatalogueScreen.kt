@@ -212,7 +212,6 @@ private fun CatalogueGridCard(card: CatalogueCardSummary, onClick: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 card.identity.appVisibleDomains.forEach { DomainTag(domain = it) }
-                card.identity.tags.forEach { DomainTag(domain = it) }
             }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
