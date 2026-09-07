@@ -30,6 +30,7 @@ data class InventoryUiState(
     val availableCards: Int = 0,
     val filteredCount: Int = 0,
     val cardCountsByLocation: Map<String, Int> = emptyMap(),
+    val allLocationsCount: Int = 0,
 )
 
 @HiltViewModel
@@ -77,12 +78,23 @@ class InventoryViewModel @Inject constructor(
         val totalCards = cards.sumOf { it.availability.totalOwned }
         val availableCards = cards.sumOf { it.availability.availableInStorage }
 
-        // Card count per visible location (how many cards at each location)
+        // Card count per visible location, respecting current search + domain filters
+        // (so the filter sheet shows how many cards each location would return)
+        val preFilterForCounts = cards.filter { card ->
+            val matchesDomains = domains.isEmpty() ||
+                card.identity.appVisibleDomains.any { domains.contains(it) }
+            val matchesSearch = search.isBlank() ||
+                card.identity.appSearchText.contains(search, ignoreCase = true) ||
+                (card.expansion?.contains(search, ignoreCase = true) == true) ||
+                (card.rarity?.contains(search, ignoreCase = true) == true)
+            matchesDomains && matchesSearch
+        }
         val countsByLocation = visibleLocations.associate { loc ->
-            loc.normalizedName to cards.filter { card ->
+            loc.normalizedName to preFilterForCounts.filter { card ->
                 card.locations.any { it.normalizedLocationName == loc.normalizedName && it.quantity > 0 }
             }.sumOf { it.availability.totalOwned }
         }
+        val allLocationsCount = preFilterForCounts.sumOf { it.availability.totalOwned }
 
         InventoryUiState(
             cards = filtered,
@@ -97,6 +109,7 @@ class InventoryViewModel @Inject constructor(
             availableCards = availableCards,
             filteredCount = filtered.size,
             cardCountsByLocation = countsByLocation,
+            allLocationsCount = allLocationsCount,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), InventoryUiState(isLoading = true))
 

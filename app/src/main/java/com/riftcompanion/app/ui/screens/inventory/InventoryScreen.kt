@@ -94,7 +94,7 @@ fun InventoryScreen(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
         topBar = {
             TopAppBar(
-                title = { Text("Inventory") },
+                title = { Text("Inventory (${uiState.filteredCount})") },
                 colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
                     containerColor = androidx.compose.ui.graphics.Color.Transparent,
                 ),
@@ -214,7 +214,7 @@ fun InventoryScreen(
             FilterSheetContent(
                 locations = uiState.locations,
                 cardCountsByLocation = uiState.cardCountsByLocation,
-                totalCardCount = uiState.totalCards,
+                totalCardCount = uiState.allLocationsCount,
                 selectedLocation = uiState.selectedLocation,
                 onLocationSelected = { viewModel.setSelectedLocation(it) },
                 availableDomains = availableDomains,
@@ -315,13 +315,14 @@ private fun FilterSheetContent(
             FilterChip(
                 selected = selectedLocation == null,
                 onClick = { onLocationSelected(null) },
-                label = { Text("All Locations") },
+                label = { Text("All Locations ($totalCardCount)") },
             )
             locations.forEach { location ->
+                val count = cardCountsByLocation[location.normalizedName] ?: 0
                 FilterChip(
                     selected = selectedLocation == location.normalizedName,
                     onClick = { onLocationSelected(location.normalizedName) },
-                    label = { Text(location.displayName) },
+                    label = { Text("${location.displayName} ($count)") },
                 )
             }
         }
