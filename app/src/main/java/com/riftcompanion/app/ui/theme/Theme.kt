@@ -43,7 +43,12 @@ data class ThemeState(
     val gradientColors: List<Color>
         @Composable get() = buildList {
             add(accentColor)
-            secondaryAccentColor?.let { add(it) }
+            val secondary = secondaryAccentColor
+            if (secondary != null) {
+                add(secondary)
+            } else {
+                add(accentColor) // duplicate so linearGradient has at least 2 colors
+            }
         }
 
     val gradient: Brush
