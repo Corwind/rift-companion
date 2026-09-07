@@ -347,7 +347,12 @@ private fun EditLocationDialog(
                 Text("Type", style = MaterialTheme.typography.labelLarge)
                 SingleChoiceSegmentedButtonRow {
                     LocationKind.entries.forEachIndexed { index, kind ->
-                        SegmentedButton(selected = state.kind == kind, onClick = { onUpdateKind(kind) }, shape = SegmentedButtonDefaults.itemShape(index = index, count = LocationKind.entries.size), label = { Text(kind.title) })
+                        SegmentedButton(
+                            selected = state.kind == kind,
+                            onClick = { onUpdateKind(kind) },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = LocationKind.entries.size),
+                            label = { Text(kind.title, maxLines = 1, softWrap = false) },
+                        )
                     }
                 }
                 Spacer(Modifier.height(8.dp))
