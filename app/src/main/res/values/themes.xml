@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.RiftCompanion" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+    <style name="Theme.RiftCompanion.Splash" parent="Theme.RiftCompanion">
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+</resources>
