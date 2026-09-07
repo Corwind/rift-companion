@@ -334,8 +334,8 @@ private fun FilterSheetContent(
         }
         Spacer(Modifier.height(8.dp))
         FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             availableDomains.forEach { domain ->
                 val isSelected = selectedDomains.contains(domain)
@@ -377,22 +377,22 @@ private fun DomainFilterTag(
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .background(color.copy(alpha = effectiveAlpha))
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(7.dp)
+                .size(10.dp)
                 .clip(CircleShape)
                 .background(color.copy(alpha = if (selected) 1f else 0.4f)),
         )
         Text(
             text = domain,
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
             color = textColor,
         )
     }
