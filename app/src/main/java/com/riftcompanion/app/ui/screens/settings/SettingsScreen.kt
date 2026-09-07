@@ -148,13 +148,14 @@ fun SettingsScreen(
                         Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF43A047))
                         Spacer(Modifier.size(8.dp))
                         Text("API key stored", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-                        Spacer(Modifier.weight(1f))
-                        OutlinedButton(onClick = { showApiKeyField = true; apiKey = "" }) { Text("Replace") }
-                        Spacer(Modifier.size(8.dp))
-                        OutlinedButton(onClick = { showDeleteConfirm = true }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
                     }
                     Spacer(Modifier.height(8.dp))
                     Text("Your API key is stored encrypted on this device. Biometric authentication is required to access it.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { showApiKeyField = true; apiKey = "" }) { Text("Replace") }
+                        OutlinedButton(onClick = { showDeleteConfirm = true }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+                    }
                 } else {
                     Column {
                         OutlinedTextField(value = apiKey, onValueChange = { apiKey = it }, label = { Text("Paste your cnk_live_… key") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())

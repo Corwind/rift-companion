@@ -24,13 +24,22 @@ fun DomainTag(
     domain: String,
     modifier: Modifier = Modifier,
 ) {
-    val color = domainColor(domain)
+    val baseColor = domainColor(domain)
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    // Brighten the color in dark mode for better visibility
+    val color = if (isDark) baseColor.copy(
+        red = (baseColor.red * 0.5f + 0.5f).coerceIn(0f, 1f),
+        green = (baseColor.green * 0.5f + 0.5f).coerceIn(0f, 1f),
+        blue = (baseColor.blue * 0.5f + 0.5f).coerceIn(0f, 1f),
+    ) else baseColor
+    val bgAlpha = if (isDark) 0.22f else 0.14f
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         modifier = modifier
             .clip(RoundedCornerShape(50))
-            .background(color.copy(alpha = 0.14f))
+            .background(color.copy(alpha = bgAlpha))
             .padding(horizontal = 8.dp, vertical = 5.dp),
     ) {
         Box(
@@ -46,6 +55,8 @@ fun DomainTag(
         )
     }
 }
+
+private fun Color.luminance(): Float = 0.299f * red + 0.587f * green + 0.114f * blue
 
 @Composable
 fun QuantityBadge(
