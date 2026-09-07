@@ -1,4 +1,4 @@
-name: Build & Release
+name: Release
 
 on:
   push:
@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Build APKs
+  release:
+    name: Build & Release APKs
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -43,13 +43,13 @@ jobs:
             -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
 
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest --no-configuration-cache
+
       - name: Build all APKs
         env:
           IS_CI: "true"
         run: ./gradlew assembleDebug assembleDev assembleRelease --no-configuration-cache
-
-      - name: Run unit tests
-        run: ./gradlew testDebugUnitTest --no-configuration-cache
 
       - name: Rename APKs with version
         if: startsWith(github.ref, 'refs/tags/v')
@@ -80,7 +80,7 @@ jobs:
           path: app/build/outputs/apk/dev/app-dev.apk
           retention-days: 30
 
-      - name: Create release with APKs
+      - name: Create GitHub release with APKs
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
