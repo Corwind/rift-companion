@@ -1,23 +1,34 @@
 package com.riftcompanion.app
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavType
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.riftcompanion.app.security.BiometricHelper
 import com.riftcompanion.app.ui.screens.carddetail.CardDetailScreen
 import com.riftcompanion.app.ui.screens.catalogue.CatalogueScreen
@@ -57,13 +68,27 @@ class MainActivity : FragmentActivity() {
     }
 }
 
+private data class BottomNavItem(
+    val route: String,
+    val label: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+)
+
+private val bottomNavItems = listOf(
+    BottomNavItem("inventory", "Inventory", Icons.Default.GridView),
+    BottomNavItem("catalogue", "Catalog", Icons.Default.Apps),
+    BottomNavItem("locations", "Locations", Icons.Default.Place),
+    BottomNavItem("settings", "Settings", Icons.Default.Settings),
+)
+
+private val mainRoutes = setOf("inventory", "catalogue", "locations", "settings")
+
 @Composable
 private fun AppNavigation(settingsViewModel: SettingsViewModel) {
     val navController = rememberNavController()
     val settingsData by settingsViewModel.settingsFlow.collectAsStateWithLifecycle(initialValue = null)
     val uiState by settingsViewModel.uiState.collectAsStateWithLifecycle()
 
-    // App lock state
     var isLocked by remember { mutableStateOf(true) }
     var authError by remember { mutableStateOf<String?>(null) }
     var isAuthenticating by remember { mutableStateOf(false) }
@@ -71,15 +96,11 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
     val biometricEnabled = settingsData?.biometricEnabled ?: false
     val setupComplete = settingsData?.setupComplete ?: false
 
-    // Determine which screen to show
     when {
-        // First-time setup
-        setupComplete.not() -> {
+        !setupComplete -> {
             SetupScreen(
                 biometricAvailable = BiometricHelper.isBiometricAvailable(navController.context),
-                onEnableBiometric = {
-                    settingsViewModel.setBiometricEnabled(true)
-                },
+                onEnableBiometric = { settingsViewModel.setBiometricEnabled(true) },
                 biometricEnabled = uiState.biometricEnabled,
                 onSaveApiKey = { key, callback ->
                     settingsViewModel.saveApiKey(key) { success, error ->
@@ -87,17 +108,11 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                         callback(success, error)
                     }
                 },
-                onComplete = {
-                    settingsViewModel.setSetupComplete(true)
-                },
+                onComplete = { settingsViewModel.setSetupComplete(true) },
             )
         }
 
-        // Biometric lock
         biometricEnabled && isLocked -> {
-            LaunchedEffect(Unit) {
-                // Don't auto-prompt — let the user tap to unlock (saves battery, avoids unexpected prompts)
-            }
             LockScreen(
                 onUnlock = {
                     isAuthenticating = true
@@ -123,37 +138,69 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
             )
         }
 
-        // Main app
         else -> {
-            NavHost(navController = navController, startDestination = "inventory") {
-                composable("inventory") {
-                    InventoryScreen(
-                        onCardClick = { nameSlug, isFromInventory ->
-                            navController.navigate("cardDetail/$nameSlug/$isFromInventory")
-                        },
-                    )
-                }
-                composable("catalogue") {
-                    CatalogueScreen(
-                        onCardClick = { nameSlug, isFromInventory ->
-                            navController.navigate("cardDetail/$nameSlug/$isFromInventory")
-                        },
-                    )
-                }
-                composable("cardDetail/{nameSlug}/{isFromInventory}") { backStackEntry ->
-                    val nameSlug = backStackEntry.arguments?.getString("nameSlug") ?: ""
-                    val isFromInventory = backStackEntry.arguments?.getString("isFromInventory")?.toBoolean() ?: false
-                    CardDetailScreen(
-                        cardNameSlug = nameSlug,
-                        isFromInventory = isFromInventory,
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-                composable("locations") {
-                    LocationsScreen()
-                }
-                composable("settings") {
-                    SettingsScreen()
+            val navBackStackEntry by navController.currentBackStackEntryAsState()
+            val currentRoute = navBackStackEntry?.destination?.route
+            val showBottomBar = currentRoute in mainRoutes
+
+            Scaffold(
+                bottomBar = {
+                    if (showBottomBar) {
+                        NavigationBar {
+                            bottomNavItems.forEach { item ->
+                                NavigationBarItem(
+                                    selected = currentRoute == item.route,
+                                    onClick = {
+                                        navController.navigate(item.route) {
+                                            popUpTo(navController.graph.findStartDestination().id) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                    icon = { Icon(item.icon, contentDescription = item.label) },
+                                    label = { Text(item.label) },
+                                )
+                            }
+                        }
+                    }
+                },
+            ) { innerPadding ->
+                NavHost(
+                    navController = navController,
+                    startDestination = "inventory",
+                    modifier = Modifier.padding(innerPadding),
+                ) {
+                    composable("inventory") {
+                        InventoryScreen(
+                            onCardClick = { nameSlug, isFromInventory ->
+                                navController.navigate("cardDetail/$nameSlug/$isFromInventory")
+                            },
+                        )
+                    }
+                    composable("catalogue") {
+                        CatalogueScreen(
+                            onCardClick = { nameSlug, isFromInventory ->
+                                navController.navigate("cardDetail/$nameSlug/$isFromInventory")
+                            },
+                        )
+                    }
+                    composable("cardDetail/{nameSlug}/{isFromInventory}") { backStackEntry ->
+                        val nameSlug = backStackEntry.arguments?.getString("nameSlug") ?: ""
+                        val isFromInventory = backStackEntry.arguments?.getString("isFromInventory")?.toBoolean() ?: false
+                        CardDetailScreen(
+                            cardNameSlug = nameSlug,
+                            isFromInventory = isFromInventory,
+                            onBack = { navController.popBackStack() },
+                        )
+                    }
+                    composable("locations") {
+                        LocationsScreen()
+                    }
+                    composable("settings") {
+                        SettingsScreen()
+                    }
                 }
             }
         }
