@@ -1,5 +1,7 @@
 package com.riftcompanion.app.ui.screens.lock
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fingerprint
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -21,11 +22,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.riftcompanion.app.ui.theme.currentThemeState
 
 /**
  * Lock screen shown on app launch when biometric is enabled.
- * Minimal UI, no background work — user must tap to authenticate.
+ * Biometric prompt is auto-triggered on appearance. If it fails or is
+ * dismissed, the user can tap anywhere to retry.
  */
 @Composable
 fun LockScreen(
@@ -33,10 +34,11 @@ fun LockScreen(
     error: String? = null,
     isAuthenticating: Boolean = false,
 ) {
-    val themeState = currentThemeState()
-
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .clickable(enabled = !isAuthenticating) { onUnlock() },
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -54,24 +56,21 @@ fun LockScreen(
             Text(
                 "RiftCompanion",
                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onBackground,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Tap to authenticate with biometrics",
+                if (isAuthenticating) "Authenticating…"
+                else if (error != null) "Tap to retry"
+                else "Authenticating with biometrics…",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(32.dp))
 
             if (isAuthenticating) {
-                CircularProgressIndicator()
-            } else {
-                Button(onClick = onUnlock) {
-                    Icon(Icons.Default.Fingerprint, contentDescription = null)
-                    Spacer(Modifier.height(8.dp))
-                    Text("Unlock")
-                }
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
 
             error?.let {

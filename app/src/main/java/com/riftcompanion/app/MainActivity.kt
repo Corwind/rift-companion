@@ -3,16 +3,17 @@ package com.riftcompanion.app
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -68,17 +69,17 @@ class MainActivity : FragmentActivity() {
     }
 }
 
-private data class BottomNavItem(
+private data class NavItem(
     val route: String,
     val label: String,
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
 )
 
-private val bottomNavItems = listOf(
-    BottomNavItem("inventory", "Inventory", Icons.Default.GridView),
-    BottomNavItem("catalogue", "Catalog", Icons.Default.Apps),
-    BottomNavItem("locations", "Locations", Icons.Default.Place),
-    BottomNavItem("settings", "Settings", Icons.Default.Settings),
+private val navItems = listOf(
+    NavItem("inventory", "Inventory", Icons.Default.GridView),
+    NavItem("catalogue", "Catalog", Icons.Default.Apps),
+    NavItem("locations", "Locations", Icons.Default.Place),
+    NavItem("settings", "Settings", Icons.Default.Settings),
 )
 
 private val mainRoutes = setOf("inventory", "catalogue", "locations", "settings")
@@ -113,8 +114,9 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
         }
 
         biometricEnabled && isLocked -> {
-            LockScreen(
-                onUnlock = {
+            // Auto-trigger biometric prompt when the lock screen appears
+            LaunchedEffect(Unit) {
+                if (!isAuthenticating) {
                     isAuthenticating = true
                     authError = null
                     BiometricHelper.authenticate(
@@ -128,10 +130,33 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                             isAuthenticating = false
                         },
                         onFail = {
-                            authError = "Authentication failed. Try again."
+                            authError = "Authentication failed. Tap to retry."
                             isAuthenticating = false
                         },
                     )
+                }
+            }
+            LockScreen(
+                onUnlock = {
+                    if (!isAuthenticating) {
+                        isAuthenticating = true
+                        authError = null
+                        BiometricHelper.authenticate(
+                            activity = navController.context as FragmentActivity,
+                            onSuccess = {
+                                isLocked = false
+                                isAuthenticating = false
+                            },
+                            onError = { error ->
+                                authError = error
+                                isAuthenticating = false
+                            },
+                            onFail = {
+                                authError = "Authentication failed. Tap to retry."
+                                isAuthenticating = false
+                            },
+                        )
+                    }
                 },
                 error = authError,
                 isAuthenticating = isAuthenticating,
@@ -141,36 +166,35 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
         else -> {
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = navBackStackEntry?.destination?.route
-            val showBottomBar = currentRoute in mainRoutes
+            val showRail = currentRoute in mainRoutes
 
-            Scaffold(
-                bottomBar = {
-                    if (showBottomBar) {
-                        NavigationBar {
-                            bottomNavItems.forEach { item ->
-                                NavigationBarItem(
-                                    selected = currentRoute == item.route,
-                                    onClick = {
-                                        navController.navigate(item.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) {
-                                                saveState = true
-                                            }
-                                            launchSingleTop = true
-                                            restoreState = true
+            Row(modifier = Modifier.fillMaxSize()) {
+                // Side navigation rail — only on main screens
+                if (showRail) {
+                    NavigationRail {
+                        navItems.forEach { item ->
+                            NavigationRailItem(
+                                selected = currentRoute == item.route,
+                                onClick = {
+                                    navController.navigate(item.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
                                         }
-                                    },
-                                    icon = { Icon(item.icon, contentDescription = item.label) },
-                                    label = { Text(item.label) },
-                                )
-                            }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                icon = { Icon(item.icon, contentDescription = item.label) },
+                                label = { Text(item.label) },
+                            )
                         }
                     }
-                },
-            ) { innerPadding ->
+                }
+
                 NavHost(
                     navController = navController,
                     startDestination = "inventory",
-                    modifier = Modifier.padding(innerPadding),
+                    modifier = Modifier.weight(1f),
                 ) {
                     composable("inventory") {
                         InventoryScreen(
