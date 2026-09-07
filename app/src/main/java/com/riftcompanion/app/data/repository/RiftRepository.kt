@@ -68,7 +68,7 @@ class RiftRepository @Inject constructor(
                             cardType = first.attributes["cardType"]?.let { (it as? com.riftcompanion.app.domain.model.JsonValue.Str)?.value },
                             superType = first.attributes["superType"]?.let { (it as? com.riftcompanion.app.domain.model.JsonValue.Str)?.value },
                             domains = first.attributes["domains"]?.let { extractStringList(it) } ?: emptyList(),
-                            tags = first.attributes["tags"]?.let { extractStringList(it) } ?: emptyList(),
+                            tags = first.attributes["cardTags"]?.let { extractStringList(it) } ?: emptyList(),
                             energyCost = first.attributes["energyCost"]?.let { (it as? com.riftcompanion.app.domain.model.JsonValue.Num)?.value?.toInt() },
                             mightCost = first.attributes["mightCost"]?.let { (it as? com.riftcompanion.app.domain.model.JsonValue.Num)?.value?.toInt() },
                             attributes = first.attributes,
