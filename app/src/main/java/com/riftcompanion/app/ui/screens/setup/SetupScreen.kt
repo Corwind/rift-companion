@@ -1,6 +1,9 @@
 package com.riftcompanion.app.ui.screens.setup
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,9 +11,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material3.Button
@@ -19,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,11 +33,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.riftcompanion.app.ui.components.ThemedCardSurface
+import com.riftcompanion.app.ui.components.gradientBackground
+import com.riftcompanion.app.ui.theme.currentThemeState
 
 /**
  * First-time setup screen. Guides the user through:
@@ -49,10 +60,13 @@ fun SetupScreen(
     var isVerifying by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scrollState = rememberScrollState()
+    val themeState = currentThemeState()
+    val gradientBrush = Brush.linearGradient(themeState.gradientColors)
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .gradientBackground()
             .verticalScroll(scrollState)
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -61,6 +75,7 @@ fun SetupScreen(
         Text(
             "Welcome to RiftCompanion",
             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center,
         )
         Text(
@@ -74,11 +89,16 @@ fun SetupScreen(
         ThemedCardSurface(
             modifier = Modifier.fillMaxWidth(),
             cornerRadius = 18,
-            tintStrength = 0.075f,
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
-                Text("Step 1: Enable Biometric Security", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
-                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    StepBadge(number = 1, gradientBrush = gradientBrush)
+                    Spacer(Modifier.size(12.dp))
+                    Icon(Icons.Default.Fingerprint, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.size(8.dp))
+                    Text("Biometric Security", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                }
+                Spacer(Modifier.height(10.dp))
                 Text(
                     "RiftCompanion requires biometric authentication to protect your CardNexus credentials. " +
                         "Your fingerprint or face will be needed each time you open the app.",
@@ -93,11 +113,15 @@ fun SetupScreen(
                         color = MaterialTheme.colorScheme.error,
                     )
                 } else if (biometricEnabled) {
-                    Text("✓ Biometric authentication enabled", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.size(6.dp))
+                        Text("Biometric authentication enabled", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                    }
                 } else {
                     Button(onClick = onEnableBiometric) {
                         Icon(Icons.Default.Fingerprint, contentDescription = null)
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.size(8.dp))
                         Text("Enable Biometrics")
                     }
                 }
@@ -108,11 +132,16 @@ fun SetupScreen(
         ThemedCardSurface(
             modifier = Modifier.fillMaxWidth(),
             cornerRadius = 18,
-            tintStrength = 0.075f,
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
-                Text("Step 2: Connect CardNexus", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
-                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    StepBadge(number = 2, gradientBrush = gradientBrush)
+                    Spacer(Modifier.size(12.dp))
+                    Icon(Icons.Default.Key, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.size(8.dp))
+                    Text("Connect CardNexus", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                }
+                Spacer(Modifier.height(10.dp))
                 Text(
                     "Enter your CardNexus API key. Create one at cardnexus.com with inventory:read and inventory:write scopes.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -152,7 +181,7 @@ fun SetupScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Icon(Icons.Default.Key, contentDescription = null)
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.size(8.dp))
                         Text("Verify and Save")
                     }
                 }
@@ -170,6 +199,24 @@ fun SetupScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        Button(onClick = onComplete) { Text("Skip for now") }
+        TextButton(onClick = onComplete) { Text("Skip for now") }
+    }
+}
+
+@Composable
+private fun StepBadge(number: Int, gradientBrush: Brush) {
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .clip(CircleShape)
+            .background(gradientBrush)
+            .border(1.dp, MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.3f), CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = number.toString(),
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onPrimary,
+        )
     }
 }

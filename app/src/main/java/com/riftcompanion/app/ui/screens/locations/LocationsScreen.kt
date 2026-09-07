@@ -1,11 +1,10 @@
 package com.riftcompanion.app.ui.screens.locations
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,23 +12,24 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Style
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -57,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -113,12 +114,21 @@ fun LocationsScreen(
                 CircularProgressIndicator()
             }
         } else if (uiState.locations.isEmpty()) {
-            Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    "No locations. Create one or sync from CardNexus.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Column(
+                modifier = Modifier.padding(padding).fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(
+                    Icons.Default.Place,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Spacer(Modifier.height(16.dp))
+                Text("No Locations", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
+                Spacer(Modifier.height(4.dp))
+                Text("Create one or sync from CardNexus.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
             }
         } else {
             LazyColumn(
@@ -126,19 +136,19 @@ fun LocationsScreen(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                // Summary
+                // Summary with icon+count chips
                 item {
                     val storageCount = uiState.locations.count { it.kind == LocationKind.Storage }
                     val deckCount = uiState.locations.count { it.kind == LocationKind.Deck }
                     val unavailCount = uiState.locations.count { it.kind == LocationKind.Unavailable }
-                    ThemedCardSurface(cornerRadius = 12, tintStrength = 0.05f) {
+                    ThemedCardSurface(cornerRadius = 12) {
                         Row(
                             modifier = Modifier.padding(14.dp),
-                            horizontalArrangement = Arrangement.spacedBy(18.dp),
-                        ) {
-                            Text("$storageCount storage", style = MaterialTheme.typography.bodyMedium)
-                            Text("$deckCount decks", style = MaterialTheme.typography.bodyMedium)
-                            Text("$unavailCount unavailable", style = MaterialTheme.typography.bodyMedium)
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                            SummaryChip(Icons.Default.Inventory2, "$storageCount", "Storage", Color(0xFF43A047))
+                            SummaryChip(Icons.Default.Style, "$deckCount", "Decks", MaterialTheme.colorScheme.primary)
+                            SummaryChip(Icons.Default.Block, "$unavailCount", "Unavailable", MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -155,7 +165,6 @@ fun LocationsScreen(
         }
     }
 
-    // Create dialog
     if (showCreateDialog) {
         CreateLocationDialog(
             onCreate = { name, color, icon ->
@@ -166,7 +175,6 @@ fun LocationsScreen(
         )
     }
 
-    // Edit dialog
     if (editState.isEditing) {
         EditLocationDialog(
             state = editState,
@@ -181,7 +189,6 @@ fun LocationsScreen(
         )
     }
 
-    // Delete confirmation
     if (editState.showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { viewModel.hideDeleteConfirm() },
@@ -191,22 +198,27 @@ fun LocationsScreen(
                     if (editState.cardCount == 0)
                         "This will remove the location from CardNexus. This cannot be undone."
                     else
-                        "This location contains $editState cardCount cards. Move all cards elsewhere before deleting."
+                        "This location contains ${editState.cardCount} cards. Move all cards elsewhere before deleting."
                 )
             },
             confirmButton = {
                 if (editState.cardCount == 0) {
-                    TextButton(
-                        onClick = { viewModel.deleteLocation() },
-                    ) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                    TextButton(onClick = { viewModel.deleteLocation() }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
                 } else {
                     TextButton(onClick = { viewModel.hideDeleteConfirm() }) { Text("OK") }
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { viewModel.hideDeleteConfirm() }) { Text("Cancel") }
-            },
+            dismissButton = { TextButton(onClick = { viewModel.hideDeleteConfirm() }) { Text("Cancel") } },
         )
+    }
+}
+
+@Composable
+private fun SummaryChip(icon: androidx.compose.ui.graphics.vector.ImageVector, count: String, label: String, tint: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(4.dp))
+        Text("$count $label", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
@@ -217,25 +229,25 @@ private fun LocationRow(
     onEdit: () -> Unit,
     onToggleHidden: () -> Unit,
 ) {
+    val borderColor = location.color?.let { parseColor(it) } ?: MaterialTheme.colorScheme.outlineVariant
     ThemedCardSurface(
         modifier = Modifier.fillMaxWidth(),
         cornerRadius = 12,
-        tintStrength = 0.05f,
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Color swatch
-            location.color?.let {
-                Box(
-                    modifier = Modifier
-                        .size(18.dp)
-                        .clip(CircleShape)
-                        .androidx_fill(parseColor(it)),
-                )
-            }
-            Spacer(Modifier.size(14.dp))
+            // Colored left border
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(40.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(borderColor),
+            )
+            Spacer(Modifier.width(12.dp))
             // Kind icon
             Icon(
                 imageVector = when (location.kind) {
@@ -247,9 +259,9 @@ private fun LocationRow(
                 tint = if (location.kind == LocationKind.Storage) Color(0xFF43A047)
                     else MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.size(14.dp))
+            Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(location.displayName, style = MaterialTheme.typography.titleSmall)
+                Text(location.displayName, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
                 Text(
                     text = when (location.kind) {
                         LocationKind.Storage -> "Storage"
@@ -265,16 +277,21 @@ private fun LocationRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            // Hidden toggle
+            // Hidden toggle with visibility icon
             if (location.kind != LocationKind.Unavailable) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Hide", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.VisibilityOff, contentDescription = "Hide", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Hide", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     Switch(checked = location.hidden, onCheckedChange = { onToggleHidden() })
                 }
             }
             IconButton(onClick = onEdit) {
                 Icon(Icons.Default.Edit, contentDescription = "Edit location")
             }
+            Icon(Icons.Default.ChevronRight, contentDescription = "View", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -293,34 +310,14 @@ private fun CreateLocationDialog(
         title = { Text("Create Location") },
         text = {
             Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Location name") },
-                    singleLine = true,
-                )
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Location name") }, singleLine = true)
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = color,
-                    onValueChange = { color = it },
-                    label = { Text("Color (e.g. blue, #FF5733)") },
-                    singleLine = true,
-                )
+                OutlinedTextField(value = color, onValueChange = { color = it }, label = { Text("Color (e.g. blue, #FF5733)") }, singleLine = true)
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = icon,
-                    onValueChange = { icon = it },
-                    label = { Text("Icon name (optional)") },
-                    singleLine = true,
-                )
+                OutlinedTextField(value = icon, onValueChange = { icon = it }, label = { Text("Icon name (optional)") }, singleLine = true)
             }
         },
-        confirmButton = {
-            Button(
-                onClick = { onCreate(name.trim(), color.ifBlank { null }, icon.ifBlank { null }) },
-                enabled = name.isNotBlank(),
-            ) { Text("Create") }
-        },
+        confirmButton = { Button(onClick = { onCreate(name.trim(), color.ifBlank { null }, icon.ifBlank { null }) }, enabled = name.isNotBlank()) { Text("Create") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
@@ -343,29 +340,14 @@ private fun EditLocationDialog(
         title = { Text("Edit Location") },
         text = {
             Column {
-                OutlinedTextField(
-                    value = state.name,
-                    onValueChange = { onUpdateName(it) },
-                    label = { Text("Location name") },
-                    singleLine = true,
-                )
+                OutlinedTextField(value = state.name, onValueChange = { onUpdateName(it) }, label = { Text("Location name") }, singleLine = true)
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = state.color ?: "",
-                    onValueChange = { onUpdateColor(it.ifBlank { null }) },
-                    label = { Text("Color") },
-                    singleLine = true,
-                )
+                OutlinedTextField(value = state.color ?: "", onValueChange = { onUpdateColor(it.ifBlank { null }) }, label = { Text("Color") }, singleLine = true)
                 Spacer(Modifier.height(8.dp))
                 Text("Type", style = MaterialTheme.typography.labelLarge)
                 SingleChoiceSegmentedButtonRow {
                     LocationKind.entries.forEachIndexed { index, kind ->
-                        SegmentedButton(
-                            selected = state.kind == kind,
-                            onClick = { onUpdateKind(kind) },
-                            shape = SegmentedButtonDefaults.itemShape(index = index, count = LocationKind.entries.size),
-                            label = { Text(kind.title) },
-                        )
+                        SegmentedButton(selected = state.kind == kind, onClick = { onUpdateKind(kind) }, shape = SegmentedButtonDefaults.itemShape(index = index, count = LocationKind.entries.size), label = { Text(kind.title) })
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -377,18 +359,10 @@ private fun EditLocationDialog(
                 Text("Cards in this location: ${state.cardCount}", style = MaterialTheme.typography.bodySmall)
             }
         },
-        confirmButton = {
-            Button(onClick = onSave, enabled = state.name.isNotBlank() && !state.isSaving) {
-                Text(if (state.isSaving) "Saving…" else "Save")
-            }
-        },
+        confirmButton = { Button(onClick = onSave, enabled = state.name.isNotBlank() && !state.isSaving) { Text(if (state.isSaving) "Saving…" else "Save") } },
         dismissButton = {
             Row {
-                if (state.cardCount == 0) {
-                    TextButton(onClick = onDelete) {
-                        Text("Delete", color = MaterialTheme.colorScheme.error)
-                    }
-                }
+                if (state.cardCount == 0) { TextButton(onClick = onDelete) { Text("Delete", color = MaterialTheme.colorScheme.error) } }
                 TextButton(onClick = onCancel) { Text("Cancel") }
             }
         },
@@ -409,15 +383,8 @@ private fun parseColor(value: String): Color {
     val expanded = if (hex.length == 3) hex.map { "$it$it" }.joinToString("") else hex
     return try {
         val num = expanded.toLong(16)
-        Color(
-            red = ((num shr 16) and 0xFF) / 255f,
-            green = ((num shr 8) and 0xFF) / 255f,
-            blue = (num and 0xFF) / 255f,
-        )
-    } catch (_: Exception) {
-        Color.Gray
-    }
+        Color(red = ((num shr 16) and 0xFF) / 255f, green = ((num shr 8) and 0xFF) / 255f, blue = (num and 0xFF) / 255f)
+    } catch (_: Exception) { Color.Gray }
 }
 
-private fun Modifier.androidx_fill(color: Color): Modifier =
-    this.then(background(color))
+private fun Modifier.androidx_fill(color: Color): Modifier = this.then(background(color))

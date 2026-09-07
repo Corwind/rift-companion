@@ -1,6 +1,7 @@
 package com.riftcompanion.app.ui.screens.lock
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material3.CircularProgressIndicator
@@ -19,9 +21,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.riftcompanion.app.ui.theme.currentThemeState
 
 /**
  * Lock screen shown on app launch when biometric is enabled.
@@ -34,6 +39,9 @@ fun LockScreen(
     error: String? = null,
     isAuthenticating: Boolean = false,
 ) {
+    val themeState = currentThemeState()
+    val gradientBrush = Brush.linearGradient(themeState.gradientColors)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -46,16 +54,26 @@ fun LockScreen(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.padding(32.dp),
         ) {
-            Icon(
-                imageVector = Icons.Default.Fingerprint,
-                contentDescription = "Biometric",
-                modifier = Modifier.size(72.dp),
-                tint = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(Modifier.height(24.dp))
+            // Large gradient circle behind fingerprint icon
+            Box(
+                modifier = Modifier
+                    .size(120.dp)
+                    .clip(CircleShape)
+                    .background(gradientBrush, alpha = 0.3f)
+                    .border(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Fingerprint,
+                    contentDescription = "Biometric",
+                    modifier = Modifier.size(56.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Spacer(Modifier.height(28.dp))
             Text(
                 "RiftCompanion",
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
+                style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onBackground,
             )
             Spacer(Modifier.height(8.dp))
