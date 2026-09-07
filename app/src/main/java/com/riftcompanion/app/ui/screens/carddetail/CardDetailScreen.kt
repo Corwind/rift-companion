@@ -134,10 +134,16 @@ fun CardDetailScreen(
 
                 // Stats
                 val isLegend = identity.cardType?.equals("Legend", ignoreCase = true) == true
+                val isUnit = identity.cardType?.equals("Unit", ignoreCase = true) == true
+                val isSpell = identity.cardType?.equals("Spell", ignoreCase = true) == true
                 if (!isLegend) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // Energy is a cost for all non-legend cards
                         identity.energyCost?.let { StatCard("Energy", it.toString(), Icons.Default.Bolt) }
-                        identity.mightCost?.let { StatCard("Might", it.toString(), Icons.Default.FitnessCenter) }
+                        // Might is a strength stat for units only, spells don't have it
+                        if (isUnit) {
+                            identity.mightCost?.let { StatCard("Might", it.toString(), Icons.Default.FitnessCenter) }
+                        }
                         identity.attributes.firstDisplayValue(listOf("power", "attack", "strength"))?.let { StatCard("Power", it, Icons.Default.Shield) }
                         identity.attributes.firstDisplayValue(listOf("health", "hp"))?.let { StatCard("Health", it, Icons.Default.Shield) }
                         identity.attributes.firstDisplayValue(listOf("durability"))?.let { StatCard("Durability", it, Icons.Default.Shield) }
