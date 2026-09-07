@@ -186,7 +186,7 @@ class CardNexusClient @Inject constructor(
             )
             val body = json.encodeToString(com.riftcompanion.app.data.api.dto.InventoryLocationUpdateDTO.serializer(), dto)
                 .toRequestBody("application/json".toMediaType())
-            val encodedName = java.net.URLEncoder.encode(request.currentName.trim(), "UTF-8")
+            val encodedName = java.net.URLEncoder.encode(request.currentName.trim(), "UTF-8").replace("+", "%20")
             val httpRequest = authRequestBuilder(BASE_URL + "inventory/locations/$encodedName")
                 .patch(body)
                 .build()
@@ -200,7 +200,7 @@ class CardNexusClient @Inject constructor(
 
     suspend fun deleteLocation(name: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val encodedName = java.net.URLEncoder.encode(name.trim(), "UTF-8")
+            val encodedName = java.net.URLEncoder.encode(name.trim(), "UTF-8").replace("+", "%20")
             val body = "{}".toRequestBody("application/json".toMediaType())
             val httpRequest = authRequestBuilder(BASE_URL + "inventory/locations/$encodedName")
                 .delete(body)
@@ -232,7 +232,7 @@ class CardNexusClient @Inject constructor(
 
     suspend fun deleteInventoryLine(inventoryID: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val encodedID = java.net.URLEncoder.encode(inventoryID.trim(), "UTF-8")
+            val encodedID = java.net.URLEncoder.encode(inventoryID.trim(), "UTF-8").replace("+", "%20")
             val body = "{}".toRequestBody("application/json".toMediaType())
             val httpRequest = authRequestBuilder(BASE_URL + "inventory/$encodedID")
                 .delete(body)
