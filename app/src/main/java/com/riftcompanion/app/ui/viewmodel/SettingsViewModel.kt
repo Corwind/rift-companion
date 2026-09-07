@@ -168,7 +168,25 @@ class SettingsViewModel @Inject constructor(
             return
         }
 
-        performSync()
+        performSync(forceCatalogue = false)
+    }
+
+    /**
+     * Forces a catalogue re-download regardless of checksum, then syncs
+     * inventory and locations. Same metered warning logic as synchronize().
+     */
+    fun forceCatalogueSync() {
+        if (_uiState.value.isSyncing) return
+
+        val isMetered = NetworkUtils.isMeteredConnection(context)
+        _uiState.value = _uiState.value.copy(isMeteredConnection = isMetered)
+
+        if (isMetered && !_uiState.value.dataWarningAcked) {
+            _uiState.value = _uiState.value.copy(showDataWarning = true)
+            return
+        }
+
+        performSync(forceCatalogue = true)
     }
 
     /**
@@ -187,14 +205,14 @@ class SettingsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(showDataWarning = false)
     }
 
-    private fun performSync() {
+    private fun performSync(forceCatalogue: Boolean = false) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isSyncing = true,
-                syncMessage = "Connecting to CardNexus…",
+                syncMessage = if (forceCatalogue) "Re-downloading catalogue…" else "Connecting to CardNexus…",
                 syncError = null,
             )
-            val result = repository.synchronize(forceCatalogue = false)
+            val result = repository.synchronize(forceCatalogue = forceCatalogue)
             result.fold(
                 onSuccess = { syncResult ->
                     _uiState.value = _uiState.value.copy(

@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Menu
@@ -182,6 +183,12 @@ fun SettingsScreen(
                         Icon(Icons.Default.Refresh, contentDescription = null)
                         Spacer(Modifier.size(8.dp))
                         Text("Synchronize Now")
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = { viewModel.forceCatalogueSync() }, enabled = uiState.hasApiKey, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.CloudDownload, contentDescription = null)
+                        Spacer(Modifier.size(8.dp))
+                        Text("Force Catalogue Sync")
                     }
                 }
                 uiState.lastSyncTimestamp?.let {
