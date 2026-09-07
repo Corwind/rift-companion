@@ -18,15 +18,16 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
-        buildConfigField("String", "VERSION_NAME", "\"1.0.0\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
 
+    // Version name with suffix per build type: release=1.0.0, debug=1.0.0-debug, dev=1.0.0-dev
+    val baseVersion = "1.0.0"
+
     signingConfigs {
         create("release") {
-            // Use environment variables if available (CI), otherwise fall back to debug signing
             storeFile = file(System.getenv("KEYSTORE_FILE") ?: "${rootProject.projectDir}/debug.keystore")
             storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "android"
             keyAlias = System.getenv("KEY_ALIAS") ?: "androiddebugkey"
@@ -43,6 +44,14 @@ android {
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release")
+            buildConfigField("String", "VERSION_NAME", "\"$baseVersion\"")
+        }
+        debug {
+            buildConfigField("String", "VERSION_NAME", "\"$baseVersion-debug\"")
+        }
+        create("dev") {
+            initWith(getByName("debug"))
+            buildConfigField("String", "VERSION_NAME", "\"$baseVersion-dev\"")
         }
     }
 
