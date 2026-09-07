@@ -219,6 +219,16 @@ fun SettingsScreen(
                     Switch(checked = uiState.biometricEnabled, onCheckedChange = { viewModel.setBiometricEnabled(it) })
                 }
             }
+
+            // Version
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "RiftCompanion v${com.riftcompanion.app.BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 
