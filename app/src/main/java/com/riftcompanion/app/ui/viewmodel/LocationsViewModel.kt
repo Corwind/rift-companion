@@ -93,7 +93,9 @@ class LocationsViewModel @Inject constructor(
     }
 
     fun updateKind(kind: LocationKind) {
-        _editState.value = _editState.value.copy(kind = kind)
+        // When marking as unavailable, auto-hide from inventory by default
+        val newHidden = if (kind == LocationKind.Unavailable) true else _editState.value.hidden
+        _editState.value = _editState.value.copy(kind = kind, hidden = newHidden)
     }
 
     fun updateHidden(hidden: Boolean) {
@@ -199,6 +201,11 @@ class LocationsViewModel @Inject constructor(
     }
 
     fun toggleHidden(location: LocationPolicy) {
+        // Don't allow unhiding an unavailable location — unavailable = always hidden
+        if (location.kind == LocationKind.Unavailable && location.hidden) {
+            _message.value = "Unavailable locations are always hidden from inventory."
+            return
+        }
         viewModelScope.launch {
             repository.updateLocationPolicy(location.copy(hidden = !location.hidden))
             _message.value = if (location.hidden) "Location '${location.displayName}' is now visible."
