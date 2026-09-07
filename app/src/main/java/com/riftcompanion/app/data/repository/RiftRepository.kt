@@ -188,6 +188,16 @@ class RiftRepository @Inject constructor(
         locationPolicyDao.delete(normalizedName)
     }
 
+    // ── Credential verification ──────────────────────────────────────────
+
+    /**
+     * Verifies the stored API key by fetching locations (inventory:read).
+     * Mirrors RiftBuilder's verifyCredential: saving verifies read only;
+     * CardNexus will report a missing inventory:write scope when a physical
+     * move is attempted.
+     */
+    suspend fun verifyCredential(): Result<Unit> = cardNexusClient.verifyCredential()
+
     // ── Location API mutations ─────────────────────────────────────────
 
     suspend fun createLocation(name: String, color: String?, icon: String?): Result<InventoryLocation> =

@@ -102,18 +102,43 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsDataStore.setDataWarningAcked(value) }
     }
 
+    /**
+     * Saves and verifies the API key. Mirrors RiftBuilder's storeAndVerifyCredential:
+     * 1. Save the key to encrypted storage.
+     * 2. Verify inventory:read by calling verifyCredential (fetches locations).
+     * 3. On failure, restore the previous key (or delete if none existed).
+     * 4. On success, notify that read is confirmed; CardNexus will check
+     *    inventory:write when a physical move is attempted.
+     */
     fun saveApiKey(key: String, onResult: (Boolean, String?) -> Unit) {
+        val trimmed = key.trim()
+        if (trimmed.isEmpty()) {
+            onResult(false, "API key cannot be empty.")
+            return
+        }
         viewModelScope.launch {
-            credentialStore.saveApiKey(key)
-            val result = repository.synchronize(forceCatalogue = true)
-            result.fold(
+            // Save the previous key so we can restore on failure
+            val previousKey = credentialStore.loadApiKey()
+            credentialStore.saveApiKey(trimmed)
+
+            val verifyResult = repository.verifyCredential()
+            verifyResult.fold(
                 onSuccess = {
-                    _uiState.value = _uiState.value.copy(hasApiKey = true, syncError = null)
+                    _uiState.value = _uiState.value.copy(
+                        hasApiKey = true,
+                        syncError = null,
+                        syncMessage = "API key accepted for inventory reading and stored securely. CardNexus will check inventory:write access when a physical move is attempted.",
+                    )
                     onResult(true, null)
                 },
                 onFailure = { error ->
-                    credentialStore.deleteApiKey()
-                    _uiState.value = _uiState.value.copy(hasApiKey = false)
+                    // Verification failed — restore the previous key or delete
+                    if (previousKey != null) {
+                        credentialStore.saveApiKey(previousKey)
+                    } else {
+                        credentialStore.deleteApiKey()
+                    }
+                    _uiState.value = _uiState.value.copy(hasApiKey = previousKey != null)
                     onResult(false, error.message)
                 },
             )

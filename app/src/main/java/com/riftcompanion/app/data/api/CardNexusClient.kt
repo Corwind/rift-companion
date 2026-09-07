@@ -57,6 +57,12 @@ class CardNexusClient @Inject constructor(
             .header("Accept", "application/json")
     }
 
+    /**
+     * Verifies that the stored API key has inventory:read scope by fetching
+     * locations. This mirrors the macOS RiftBuilder behaviour: saving verifies
+     * inventory:read only; CardNexus will report a missing inventory:write scope
+     * when a physical move is attempted.
+     */
     suspend fun verifyCredential(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching { fetchLocationsInternal(); Unit }
     }
