@@ -71,7 +71,7 @@ fun CardDetailScreen(
         val card = uiState.card
         if (card == null) {
             Column(Modifier.padding(padding).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Text("Loading…", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                Text("Loading…", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
             val identity = card.identity
@@ -105,11 +105,11 @@ fun CardDetailScreen(
                             .joinToString(" · ")
                         if (typeLine.isNotBlank()) {
                             Spacer(Modifier.height(4.dp))
-                            Text(typeLine, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                            Text(typeLine, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         if (identity.appVisibleDomains.isNotEmpty()) {
                             Spacer(Modifier.height(8.dp))
-                            Text("Domains", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            Text("Domains", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(4.dp))
                             androidx.compose.foundation.layout.FlowRow(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -147,7 +147,7 @@ fun CardDetailScreen(
 
                 // Flavor text
                 identity.attributes.firstText(listOf("flavorText", "flavor_text", "flavourText", "flavour_text"))?.let { flavor ->
-                    Text(flavor, style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Text(flavor, style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(16.dp))
                 }
 
@@ -208,7 +208,7 @@ fun CardDetailScreen(
 private fun StatCard(title: String, value: String) {
     ThemedCardSurface(cornerRadius = 8, tintStrength = 0.06f) {
         Column(modifier = Modifier.padding(9.dp)) {
-            Text(title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            Text(title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(value, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
         }
     }
@@ -234,7 +234,7 @@ private fun MetadataRow(title: String, value: String?) {
                 .padding(vertical = 3.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(value, style = MaterialTheme.typography.bodyMedium)
         }
     }

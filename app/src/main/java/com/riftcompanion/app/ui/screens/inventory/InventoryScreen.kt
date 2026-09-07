@@ -173,7 +173,7 @@ fun InventoryScreen(
                         if (uiState.searchQuery.isNotBlank()) "No cards match your search."
                         else "No inventory. Sync from Settings.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             } else if (uiState.viewMode == CardViewMode.GRID) {
@@ -259,7 +259,7 @@ private fun FilterSheetContent(
         Spacer(Modifier.height(16.dp))
 
         // Location section
-        Text("Location", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        Text("Location", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -284,7 +284,7 @@ private fun FilterSheetContent(
         Spacer(Modifier.height(16.dp))
 
         // Domains section
-        Text("Domains", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        Text("Domains", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -376,7 +376,7 @@ private fun InventoryListRow(card: InventoryCardSummary, onClick: () -> Unit) {
                 Text(
                     text = listOfNotNull(card.identity.cardType, card.expansion, card.rarity).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

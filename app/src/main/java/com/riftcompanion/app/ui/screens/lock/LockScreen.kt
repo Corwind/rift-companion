@@ -64,7 +64,7 @@ fun LockScreen(
                 else if (error != null) "Tap to retry"
                 else "Authenticating with biometrics…",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(32.dp))

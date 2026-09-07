@@ -118,7 +118,7 @@ fun CatalogueScreen(
                         if (uiState.searchQuery.isNotBlank()) "No cards match your search."
                         else "No catalogue loaded. Sync from Settings.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             } else if (uiState.viewMode == CardViewMode.GRID) {
@@ -184,7 +184,7 @@ private fun CatalogueGridCard(card: CatalogueCardSummary, onClick: () -> Unit) {
                 Text(
                     text = "${card.printingCount} printing${if (card.printingCount == 1) "" else "s"}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -223,7 +223,7 @@ private fun CatalogueListRow(card: CatalogueCardSummary, onClick: () -> Unit) {
                         card.preferredPrinting?.expansionSlug,
                     ).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -237,7 +237,7 @@ private fun CatalogueListRow(card: CatalogueCardSummary, onClick: () -> Unit) {
                 Text(
                     text = "printings",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

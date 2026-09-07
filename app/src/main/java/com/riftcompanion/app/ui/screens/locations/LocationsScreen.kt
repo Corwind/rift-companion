@@ -117,7 +117,7 @@ fun LocationsScreen(
                 Text(
                     "No locations. Create one or sync from CardNexus.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         } else {
@@ -245,7 +245,7 @@ private fun LocationRow(
                 },
                 contentDescription = null,
                 tint = if (location.kind == LocationKind.Storage) Color(0xFF43A047)
-                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.size(14.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -257,18 +257,18 @@ private fun LocationRow(
                         LocationKind.Unavailable -> "Unavailable"
                     },
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
                     "$cardCount card${if (cardCount == 1) "" else "s"}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             // Hidden toggle
             if (location.kind != LocationKind.Unavailable) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Hide", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    Text("Hide", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Switch(checked = location.hidden, onCheckedChange = { onToggleHidden() })
                 }
             }

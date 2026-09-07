@@ -123,7 +123,7 @@ fun SettingsScreen(
             // ── Appearance ──────────────────────────────────────────────
             SettingsCard("Appearance") {
                 // Appearance mode
-                Text("Appearance", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                Text("Appearance", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(8.dp))
                 SingleChoiceSegmentedButtonRow {
                     AppAppearance.entries.forEachIndexed { index, appearance ->
@@ -139,7 +139,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(20.dp))
 
                 // Primary color
-                Text("Primary color", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                Text("Primary color", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(8.dp))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -158,7 +158,7 @@ fun SettingsScreen(
                 // Secondary color
                 if (uiState.accent.supportsCombination) {
                     Spacer(Modifier.height(20.dp))
-                    Text("Second color", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Text("Second color", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(8.dp))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),

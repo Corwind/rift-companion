@@ -66,7 +66,7 @@ fun SetupScreen(
         Text(
             "Let's set up your app in two quick steps.",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
 
@@ -83,7 +83,7 @@ fun SetupScreen(
                     "RiftCompanion requires biometric authentication to protect your CardNexus credentials. " +
                         "Your fingerprint or face will be needed each time you open the app.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(12.dp))
                 if (!biometricAvailable) {
@@ -116,7 +116,7 @@ fun SetupScreen(
                 Text(
                     "Enter your CardNexus API key. Create one at cardnexus.com with inventory:read and inventory:write scopes.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
@@ -167,7 +167,7 @@ fun SetupScreen(
         Text(
             "You can complete setup later from Settings.",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
         Button(onClick = onComplete) { Text("Skip for now") }
