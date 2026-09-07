@@ -8,19 +8,16 @@ import androidx.compose.ui.graphics.Brush
 import com.riftcompanion.app.ui.theme.currentThemeState
 
 /**
- * Applies the app's accent gradient as a subtle background.
- * The gradient runs diagonally (top-leading to bottom-trailing) at low
- * opacity so it tints the surface without hurting text readability.
- *
+ * Applies the app's accent gradient as a bold, visible background.
+ * The gradient runs diagonally (top-leading to bottom-trailing).
  * Ported from the macOS ThemeTintedSurface concept.
  */
 @Composable
 fun Modifier.gradientBackground(): Modifier {
     val themeState = currentThemeState()
     val gradientBrush = Brush.linearGradient(themeState.gradientColors)
-    val tintAlpha = if (themeState.isDark) 0.12f else 0.06f
 
     return this
         .background(MaterialTheme.colorScheme.background)
-        .background(gradientBrush, alpha = tintAlpha)
+        .background(gradientBrush, alpha = if (themeState.isDark) 0.35f else 0.22f)
 }

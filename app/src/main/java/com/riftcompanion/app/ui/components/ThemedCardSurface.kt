@@ -13,8 +13,7 @@ import com.riftcompanion.app.ui.theme.currentThemeState
 
 /**
  * Themed card surface with gradient tint, ported from the macOS ThemedCardSurface.
- * Uses the accent gradient at low opacity for a subtle frosted-glass feel.
- * The tint is kept very subtle in light mode to ensure text readability.
+ * The accent gradient is applied at a visible but readable strength.
  */
 @Composable
 fun ThemedCardSurface(
@@ -26,8 +25,8 @@ fun ThemedCardSurface(
     val themeState = currentThemeState()
     val gradientBrush = Brush.linearGradient(themeState.gradientColors)
 
-    // In light mode, halve the tint strength so text stays readable on white
-    val effectiveTint = if (themeState.isDark) tintStrength else tintStrength * 0.4f
+    // Scale up the tint so it's clearly visible
+    val effectiveTint = if (themeState.isDark) tintStrength * 3.5f else tintStrength * 2.5f
 
     Box(
         modifier = modifier
