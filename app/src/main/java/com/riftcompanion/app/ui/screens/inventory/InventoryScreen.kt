@@ -123,13 +123,14 @@ fun InventoryScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
-            // Compact search bar
-            TextField(
+            // Compact rounded search bar
+            androidx.compose.material3.OutlinedTextField(
                 value = uiState.searchQuery,
                 onValueChange = { viewModel.setSearchQuery(it) },
                 placeholder = { Text("Search…") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 4.dp),
