@@ -195,6 +195,7 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                         Text(
                             "RiftCompanion",
                             style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(start = 28.dp, top = 12.dp, bottom = 12.dp),
                         )
                         navItems.forEach { item ->
