@@ -124,7 +124,19 @@ fun CardDetailScreen(
                                 verticalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
                                 identity.appVisibleDomains.forEach { DomainTag(domain = it) }
-                                identity.tags.forEach { DomainTag(domain = it) }
+                            }
+                        }
+                        if (identity.tags.isNotEmpty()) {
+                            Spacer(Modifier.height(12.dp))
+                            Text("Tags", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(4.dp))
+                            androidx.compose.foundation.layout.FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                identity.tags.forEach { tag ->
+                                    DomainTag(domain = tag)
+                                }
                             }
                         }
                     }
