@@ -20,3 +20,23 @@
 -keepclasseswithmembers class com.riftcompanion.app.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
+
+# Error Prone annotations (needed by Tink/crypto)
+-dontwarn com.google.errorprone.annotations.**
+-keep class com.google.errorprone.annotations.** { *; }
+
+# Tink (used by EncryptedSharedPreferences)
+-keep class com.google.crypto.tink.** { *; }
+-dontwarn com.google.crypto.tink.**
+
+# Coil
+-dontwarn coil3.**
+-keep class coil3.** { *; }
+
+# OkHttp
+-dontwarn okhttp3.**
+-dontwarn okio.**
+
+# AndroidX Security
+-keep class androidx.security.crypto.** { *; }
+

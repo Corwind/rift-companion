@@ -11,3 +11,4 @@
 local.properties
 .gradle-home/
 .android-home/
+debug.keystore

@@ -24,7 +24,10 @@ android {
     }
 
     // Version name with suffix per build type: release=1.0.0, debug=1.0.0-debug, dev=1.0.0-dev
+    // Release builds show "dev" suffix when built locally (no CI env var).
+    // CI sets IS_CI=true so the release build type shows the clean version.
     val baseVersion = "1.0.0"
+    val isCi = System.getenv("IS_CI") == "true"
 
     signingConfigs {
         create("release") {
@@ -44,7 +47,8 @@ android {
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release")
-            buildConfigField("String", "VERSION_NAME", "\"$baseVersion\"")
+            // CI builds show clean version; local builds show -dev
+            buildConfigField("String", "VERSION_NAME", "\"$baseVersion${if (isCi) "" else "-dev"}\"")
         }
         debug {
             buildConfigField("String", "VERSION_NAME", "\"$baseVersion-debug\"")
