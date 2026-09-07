@@ -210,6 +210,7 @@ fun InventoryScreen(
         ModalBottomSheet(
             onDismissRequest = { showFilterSheet = false },
             sheetState = sheetState,
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
         ) {
             FilterSheetContent(
                 locations = uiState.locations,
@@ -280,6 +281,7 @@ private fun FilterSheetContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .gradientBackground()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
             .padding(bottom = 32.dp),

@@ -44,6 +44,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.riftcompanion.app.security.BiometricHelper
+import com.riftcompanion.app.ui.components.gradientBackground
 import com.riftcompanion.app.ui.screens.carddetail.CardDetailScreen
 import com.riftcompanion.app.ui.screens.catalogue.CatalogueScreen
 import com.riftcompanion.app.ui.screens.inventory.InventoryScreen
@@ -186,7 +187,10 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
             ModalNavigationDrawer(
                 drawerState = drawerState,
                 drawerContent = {
-                    ModalDrawerSheet {
+                    ModalDrawerSheet(
+                        modifier = Modifier.gradientBackground(),
+                        drawerContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    ) {
                         Spacer(Modifier.height(24.dp))
                         Text(
                             "RiftCompanion",
