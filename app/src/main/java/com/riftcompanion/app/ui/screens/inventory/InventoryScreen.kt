@@ -19,21 +19,22 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -41,6 +42,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,41 +50,46 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.riftcompanion.app.domain.model.InventoryCardSummary
+import com.riftcompanion.app.domain.model.LocationPolicy
 import com.riftcompanion.app.ui.components.CardArtwork
 import com.riftcompanion.app.ui.components.DomainTag
 import com.riftcompanion.app.ui.components.QuantityBadge
 import com.riftcompanion.app.ui.components.ThemedCardSurface
+import com.riftcompanion.app.ui.components.gradientBackground
 import com.riftcompanion.app.ui.viewmodel.CardViewMode
 import com.riftcompanion.app.ui.viewmodel.InventoryViewModel
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun InventoryScreen(
-    onCardClick: (String, Boolean) -> Unit, // nameSlug, isFromInventory
+    onCardClick: (String, Boolean) -> Unit,
+    onMenuClick: () -> Unit = {},
     viewModel: InventoryViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val availableDomains by viewModel.availableDomains.collectAsStateWithLifecycle()
 
-    var showLocationMenu by remember { mutableStateOf(false) }
-    var showDomainMenu by remember { mutableStateOf(false) }
+    var showFilterSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Scaffold(
+        modifier = Modifier.gradientBackground(),
         topBar = {
             TopAppBar(
                 title = { Text("Inventory") },
+                navigationIcon = {
+                    IconButton(onClick = onMenuClick) {
+                        Icon(Icons.Default.Menu, contentDescription = "Menu")
+                    }
+                },
                 actions = {
-                    // View mode toggle
+                    // List / Grid toggle
                     SingleChoiceSegmentedButtonRow {
                         SegmentedButton(
                             selected = uiState.viewMode == CardViewMode.LIST,
@@ -97,80 +104,41 @@ fun InventoryScreen(
                             label = { Icon(Icons.Default.GridView, contentDescription = "Grid") },
                         )
                     }
-                    // Location filter
-                    Box {
-                        IconButton(onClick = { showLocationMenu = true }) {
-                            Icon(Icons.Default.LocationOn, contentDescription = "Filter by location")
-                        }
-                        DropdownMenu(expanded = showLocationMenu, onDismissRequest = { showLocationMenu = false }) {
-                            DropdownMenuItem(
-                                text = { Text("All Locations (${uiState.totalCards})") },
-                                onClick = { viewModel.setSelectedLocation(null); showLocationMenu = false },
-                            )
-                            uiState.locations.forEach { location ->
-                                val count = uiState.locations.let { locs ->
-                                    // card count for this location
-                                    0 // will be computed from uiState
-                                }
-                                DropdownMenuItem(
-                                    text = { Text("${location.displayName}") },
-                                    onClick = { viewModel.setSelectedLocation(location.normalizedName); showLocationMenu = false },
-                                )
-                            }
-                        }
-                    }
-                    // Domain filter
-                    Box {
-                        IconButton(onClick = { showDomainMenu = true }) {
-                            Icon(Icons.Default.Tune, contentDescription = "Filter by domain")
-                        }
-                        DropdownMenu(expanded = showDomainMenu, onDismissRequest = { showDomainMenu = false }) {
-                            if (uiState.domainFilters.isNotEmpty()) {
-                                DropdownMenuItem(
-                                    text = { Text("Clear Domain Filters") },
-                                    onClick = { viewModel.clearDomainFilters(); showDomainMenu = false },
-                                )
-                            }
-                            availableDomains.forEach { domain ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Row {
-                                            Checkbox(
-                                                checked = uiState.domainFilters.contains(domain),
-                                                onCheckedChange = { viewModel.toggleDomainFilter(domain) },
-                                            )
-                                            Text(domain)
-                                        }
-                                    },
-                                    onClick = { viewModel.toggleDomainFilter(domain) },
-                                )
-                            }
-                        }
+                    // Filter button — opens bottom sheet
+                    IconButton(onClick = { showFilterSheet = true }) {
+                        Icon(
+                            Icons.Default.Tune,
+                            contentDescription = "Filters",
+                            tint = if (uiState.selectedLocation != null || uiState.domainFilters.isNotEmpty())
+                                MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                        )
                     }
                 },
             )
         },
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
-            // Search bar
+            // Compact search bar
             TextField(
                 value = uiState.searchQuery,
                 onValueChange = { viewModel.setSearchQuery(it) },
-                placeholder = { Text("Names, descriptions, domains, types…") },
+                placeholder = { Text("Search…") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
             )
 
             // Active filter chips
             if (uiState.selectedLocation != null || uiState.domainFilters.isNotEmpty()) {
-                Row(
+                FlowRow(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        .padding(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     uiState.selectedLocation?.let { locName ->
                         val loc = uiState.locations.firstOrNull { it.normalizedName == locName }
@@ -188,7 +156,7 @@ fun InventoryScreen(
                         )
                     }
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
             }
 
             if (uiState.isLoading) {
@@ -199,7 +167,7 @@ fun InventoryScreen(
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         if (uiState.searchQuery.isNotBlank()) "No cards match your search."
-                        else "No inventory. Pull to sync from CardNexus.",
+                        else "No inventory. Sync from Settings.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     )
@@ -207,9 +175,9 @@ fun InventoryScreen(
             } else if (uiState.viewMode == CardViewMode.GRID) {
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 160.dp),
-                    contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(uiState.cards, key = { it.id }) { card ->
                         InventoryGridCard(card = card, onClick = { onCardClick(card.id, true) })
@@ -217,13 +185,113 @@ fun InventoryScreen(
                 }
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
+                    contentPadding = PaddingValues(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(uiState.cards, key = { it.id }) { card ->
                         InventoryListRow(card = card, onClick = { onCardClick(card.id, true) })
                     }
                 }
+            }
+        }
+    }
+
+    // Filter bottom sheet
+    if (showFilterSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showFilterSheet = false },
+            sheetState = sheetState,
+        ) {
+            FilterSheetContent(
+                locations = uiState.locations,
+                selectedLocation = uiState.selectedLocation,
+                onLocationSelected = { viewModel.setSelectedLocation(it) },
+                availableDomains = availableDomains,
+                selectedDomains = uiState.domainFilters,
+                onDomainToggled = { viewModel.toggleDomainFilter(it) },
+                onClearAll = {
+                    viewModel.setSelectedLocation(null)
+                    viewModel.clearDomainFilters()
+                },
+            )
+        }
+    }
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun FilterSheetContent(
+    locations: List<LocationPolicy>,
+    selectedLocation: String?,
+    onLocationSelected: (String?) -> Unit,
+    availableDomains: List<String>,
+    selectedDomains: Set<String>,
+    onDomainToggled: (String) -> Unit,
+    onClearAll: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 32.dp),
+    ) {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Filters", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold))
+            if (selectedLocation != null || selectedDomains.isNotEmpty()) {
+                Text(
+                    text = "Clear all",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { onClearAll() },
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Location section
+        Text("Location", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        Spacer(Modifier.height(8.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            FilterChip(
+                selected = selectedLocation == null,
+                onClick = { onLocationSelected(null) },
+                label = { Text("All Locations") },
+            )
+            locations.forEach { location ->
+                FilterChip(
+                    selected = selectedLocation == location.normalizedName,
+                    onClick = { onLocationSelected(location.normalizedName) },
+                    label = { Text(location.displayName) },
+                )
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(16.dp))
+
+        // Domains section
+        Text("Domains", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        Spacer(Modifier.height(8.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            availableDomains.forEach { domain ->
+                FilterChip(
+                    selected = selectedDomains.contains(domain),
+                    onClick = { onDomainToggled(domain) },
+                    label = { Text(domain) },
+                )
             }
         }
     }
@@ -237,14 +305,14 @@ private fun InventoryGridCard(card: InventoryCardSummary, onClick: () -> Unit) {
         cornerRadius = 13,
         tintStrength = 0.05f,
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(10.dp)) {
             Text(
                 text = card.identity.displayName,
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
             CardArtwork(
                 imageURL = card.preferredImageURL,
                 name = card.identity.displayName,
@@ -253,22 +321,16 @@ private fun InventoryGridCard(card: InventoryCardSummary, onClick: () -> Unit) {
                     .aspectRatio(5f / 7f),
                 cornerRadius = 11,
             )
-            Spacer(Modifier.height(8.dp))
-            // Domain tags
+            Spacer(Modifier.height(6.dp))
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalArrangement = Arrangement.spacedBy(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                card.identity.appVisibleDomains.forEach { domain ->
-                    DomainTag(domain = domain)
-                }
-                card.identity.tags.forEach { tag ->
-                    DomainTag(domain = tag)
-                }
+                card.identity.appVisibleDomains.forEach { DomainTag(domain = it) }
+                card.identity.tags.forEach { DomainTag(domain = it) }
             }
-            Spacer(Modifier.height(8.dp))
-            // Quantity badges
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 QuantityBadge(title = "Total", value = card.availability.totalOwned)
                 QuantityBadge(
                     title = "Free",
@@ -290,16 +352,16 @@ private fun InventoryListRow(card: InventoryCardSummary, onClick: () -> Unit) {
         cornerRadius = 12,
         tintStrength = 0.04f,
     ) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             CardArtwork(
                 imageURL = card.preferredImageURL,
                 name = card.identity.displayName,
                 modifier = Modifier
-                    .width(48.dp)
-                    .height(67.dp),
+                    .width(44.dp)
+                    .height(62.dp),
                 cornerRadius = 6,
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = card.identity.displayName,
@@ -335,9 +397,4 @@ private fun InventoryListRow(card: InventoryCardSummary, onClick: () -> Unit) {
             }
         }
     }
-}
-
-@Composable
-private fun Checkbox(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    androidx.compose.material3.Checkbox(checked = checked, onCheckedChange = onCheckedChange)
 }

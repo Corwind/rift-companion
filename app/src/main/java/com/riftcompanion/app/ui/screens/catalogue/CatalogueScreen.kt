@@ -22,10 +22,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -48,6 +50,7 @@ import com.riftcompanion.app.ui.components.CardArtwork
 import com.riftcompanion.app.ui.components.DomainTag
 import com.riftcompanion.app.ui.components.QuantityBadge
 import com.riftcompanion.app.ui.components.ThemedCardSurface
+import com.riftcompanion.app.ui.components.gradientBackground
 import com.riftcompanion.app.ui.viewmodel.CardViewMode
 import com.riftcompanion.app.ui.viewmodel.CatalogueViewModel
 
@@ -55,14 +58,21 @@ import com.riftcompanion.app.ui.viewmodel.CatalogueViewModel
 @Composable
 fun CatalogueScreen(
     onCardClick: (String, Boolean) -> Unit,
+    onMenuClick: () -> Unit = {},
     viewModel: CatalogueViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
+        modifier = Modifier.gradientBackground(),
         topBar = {
             TopAppBar(
-                title = { Text("Catalogue") },
+                title = { Text("Catalog") },
+                navigationIcon = {
+                    IconButton(onClick = onMenuClick) {
+                        Icon(Icons.Default.Menu, contentDescription = "Menu")
+                    }
+                },
                 actions = {
                     SingleChoiceSegmentedButtonRow {
                         SegmentedButton(
@@ -86,12 +96,12 @@ fun CatalogueScreen(
             TextField(
                 value = uiState.searchQuery,
                 onValueChange = { viewModel.setSearchQuery(it) },
-                placeholder = { Text("Search every Riftbound card") },
+                placeholder = { Text("Search…") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
             )
 
             if (uiState.isLoading) {
@@ -110,9 +120,9 @@ fun CatalogueScreen(
             } else if (uiState.viewMode == CardViewMode.GRID) {
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 160.dp),
-                    contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(uiState.cards, key = { it.id }) { card ->
                         CatalogueGridCard(card = card, onClick = { onCardClick(card.id, false) })
@@ -120,7 +130,7 @@ fun CatalogueScreen(
                 }
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
+                    contentPadding = PaddingValues(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(uiState.cards, key = { it.id }) { card ->
@@ -140,14 +150,14 @@ private fun CatalogueGridCard(card: CatalogueCardSummary, onClick: () -> Unit) {
         cornerRadius = 13,
         tintStrength = 0.05f,
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(10.dp)) {
             Text(
                 text = card.identity.displayName,
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
             CardArtwork(
                 imageURL = card.preferredImageURL,
                 name = card.identity.displayName,
@@ -156,17 +166,17 @@ private fun CatalogueGridCard(card: CatalogueCardSummary, onClick: () -> Unit) {
                     .aspectRatio(5f / 7f),
                 cornerRadius = 11,
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalArrangement = Arrangement.spacedBy(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 card.identity.appVisibleDomains.forEach { DomainTag(domain = it) }
                 card.identity.tags.forEach { DomainTag(domain = it) }
             }
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                QuantityBadge(title = "Owned", value = card.identity.let { 0 }) // will be from availability
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                QuantityBadge(title = "Owned", value = 0)
                 Text(
                     text = "${card.printingCount} printing${if (card.printingCount == 1) "" else "s"}",
                     style = MaterialTheme.typography.labelSmall,
@@ -177,7 +187,6 @@ private fun CatalogueGridCard(card: CatalogueCardSummary, onClick: () -> Unit) {
     }
 }
 
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun CatalogueListRow(card: CatalogueCardSummary, onClick: () -> Unit) {
     ThemedCardSurface(
@@ -187,16 +196,16 @@ private fun CatalogueListRow(card: CatalogueCardSummary, onClick: () -> Unit) {
         cornerRadius = 12,
         tintStrength = 0.04f,
     ) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             CardArtwork(
                 imageURL = card.preferredImageURL,
                 name = card.identity.displayName,
                 modifier = Modifier
-                    .width(48.dp)
-                    .height(67.dp),
+                    .width(44.dp)
+                    .height(62.dp),
                 cornerRadius = 6,
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = card.identity.displayName,

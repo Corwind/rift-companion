@@ -3,24 +3,37 @@ package com.riftcompanion.app
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
@@ -43,6 +56,7 @@ import com.riftcompanion.app.ui.theme.ThemeState
 import com.riftcompanion.app.ui.viewmodel.SettingsViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : FragmentActivity() {
@@ -84,6 +98,7 @@ private val navItems = listOf(
 
 private val mainRoutes = setOf("inventory", "catalogue", "locations", "settings")
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AppNavigation(settingsViewModel: SettingsViewModel) {
     val navController = rememberNavController()
@@ -114,7 +129,6 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
         }
 
         biometricEnabled && isLocked -> {
-            // Auto-trigger biometric prompt when the lock screen appears
             LaunchedEffect(Unit) {
                 if (!isAuthenticating) {
                     isAuthenticating = true
@@ -164,16 +178,23 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
         }
 
         else -> {
+            val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+            val scope = rememberCoroutineScope()
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = navBackStackEntry?.destination?.route
-            val showRail = currentRoute in mainRoutes
 
-            Row(modifier = Modifier.fillMaxSize()) {
-                // Side navigation rail — only on main screens
-                if (showRail) {
-                    NavigationRail {
+            ModalNavigationDrawer(
+                drawerState = drawerState,
+                drawerContent = {
+                    ModalDrawerSheet {
+                        Spacer(Modifier.height(24.dp))
+                        Text(
+                            "RiftCompanion",
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.padding(start = 28.dp, top = 12.dp, bottom = 12.dp),
+                        )
                         navItems.forEach { item ->
-                            NavigationRailItem(
+                            NavigationDrawerItem(
                                 selected = currentRoute == item.route,
                                 onClick = {
                                     navController.navigate(item.route) {
@@ -183,24 +204,27 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                                         launchSingleTop = true
                                         restoreState = true
                                     }
+                                    scope.launch { drawerState.close() }
                                 },
                                 icon = { Icon(item.icon, contentDescription = item.label) },
                                 label = { Text(item.label) },
+                                modifier = Modifier.padding(horizontal = 12.dp),
                             )
                         }
                     }
-                }
-
+                },
+            ) {
                 NavHost(
                     navController = navController,
                     startDestination = "inventory",
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxSize(),
                 ) {
                     composable("inventory") {
                         InventoryScreen(
                             onCardClick = { nameSlug, isFromInventory ->
                                 navController.navigate("cardDetail/$nameSlug/$isFromInventory")
                             },
+                            onMenuClick = { scope.launch { drawerState.open() } },
                         )
                     }
                     composable("catalogue") {
@@ -208,6 +232,7 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                             onCardClick = { nameSlug, isFromInventory ->
                                 navController.navigate("cardDetail/$nameSlug/$isFromInventory")
                             },
+                            onMenuClick = { scope.launch { drawerState.open() } },
                         )
                     }
                     composable("cardDetail/{nameSlug}/{isFromInventory}") { backStackEntry ->
@@ -220,10 +245,14 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                         )
                     }
                     composable("locations") {
-                        LocationsScreen()
+                        LocationsScreen(
+                            onMenuClick = { scope.launch { drawerState.open() } },
+                        )
                     }
                     composable("settings") {
-                        SettingsScreen()
+                        SettingsScreen(
+                            onMenuClick = { scope.launch { drawerState.open() } },
+                        )
                     }
                 }
             }

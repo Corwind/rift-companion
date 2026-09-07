@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Delete
@@ -62,11 +63,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.riftcompanion.app.domain.model.LocationKind
 import com.riftcompanion.app.domain.model.LocationPolicy
 import com.riftcompanion.app.ui.components.ThemedCardSurface
+import com.riftcompanion.app.ui.components.gradientBackground
 import com.riftcompanion.app.ui.viewmodel.LocationsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocationsScreen(
+    onMenuClick: () -> Unit = {},
     viewModel: LocationsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -83,8 +86,16 @@ fun LocationsScreen(
     }
 
     Scaffold(
+        modifier = Modifier.gradientBackground(),
         topBar = {
-            TopAppBar(title = { Text("Locations") })
+            TopAppBar(
+                title = { Text("Locations") },
+                navigationIcon = {
+                    IconButton(onClick = onMenuClick) {
+                        Icon(Icons.Default.Menu, contentDescription = "Menu")
+                    }
+                },
+            )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
