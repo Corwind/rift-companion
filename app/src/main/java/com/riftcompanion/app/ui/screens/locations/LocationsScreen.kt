@@ -71,6 +71,7 @@ import com.riftcompanion.app.ui.viewmodel.LocationsViewModel
 @Composable
 fun LocationsScreen(
     onMenuClick: () -> Unit = {},
+    onLocationClick: (String) -> Unit = {},
     viewModel: LocationsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -157,6 +158,7 @@ fun LocationsScreen(
                     LocationRow(
                         location = location,
                         cardCount = uiState.cardCountsByLocation[location.normalizedName] ?: 0,
+                        onClick = { onLocationClick(location.normalizedName) },
                         onEdit = { viewModel.startEdit(location, uiState.cardCountsByLocation[location.normalizedName] ?: 0) },
                         onToggleHidden = { viewModel.toggleHidden(location) },
                     )
@@ -226,12 +228,15 @@ private fun SummaryChip(icon: androidx.compose.ui.graphics.vector.ImageVector, c
 private fun LocationRow(
     location: LocationPolicy,
     cardCount: Int,
+    onClick: () -> Unit,
     onEdit: () -> Unit,
     onToggleHidden: () -> Unit,
 ) {
     val borderColor = location.color?.let { parseColor(it) } ?: MaterialTheme.colorScheme.outlineVariant
     ThemedCardSurface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         cornerRadius = 12,
     ) {
         Row(

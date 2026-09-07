@@ -81,6 +81,7 @@ import com.riftcompanion.app.ui.viewmodel.InventoryViewModel
 fun InventoryScreen(
     onCardClick: (String, Boolean) -> Unit,
     onMenuClick: () -> Unit = {},
+    initialLocationFilter: String? = null,
     viewModel: InventoryViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -88,6 +89,11 @@ fun InventoryScreen(
 
     var showFilterSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // Apply initial location filter when navigated from Locations screen
+    androidx.compose.runtime.LaunchedEffect(initialLocationFilter) {
+        initialLocationFilter?.let { viewModel.setSelectedLocation(it) }
+    }
 
     Scaffold(
         modifier = Modifier.gradientBackground(),

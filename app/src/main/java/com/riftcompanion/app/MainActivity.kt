@@ -39,6 +39,8 @@ import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -221,15 +223,26 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
             ) {
                 NavHost(
                     navController = navController,
-                    startDestination = "inventory",
+                    startDestination = "inventory?location={location}",
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    composable("inventory") {
+                    composable(
+                        "inventory?location={location}",
+                        arguments = listOf(
+                            androidx.navigation.navArgument("location") {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            }
+                        ),
+                    ) { backStackEntry ->
+                        val locationFilter = backStackEntry.arguments?.getString("location")
                         InventoryScreen(
                             onCardClick = { nameSlug, isFromInventory ->
                                 navController.navigate("cardDetail/$nameSlug/$isFromInventory")
                             },
                             onMenuClick = { scope.launch { drawerState.open() } },
+                            initialLocationFilter = locationFilter,
                         )
                     }
                     composable("catalogue") {
@@ -252,6 +265,11 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                     composable("locations") {
                         LocationsScreen(
                             onMenuClick = { scope.launch { drawerState.open() } },
+                            onLocationClick = { locName ->
+                                navController.navigate("inventory?location=$locName") {
+                                    launchSingleTop = true
+                                }
+                            },
                         )
                     }
                     composable("settings") {
