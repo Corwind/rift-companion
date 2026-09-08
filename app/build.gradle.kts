@@ -130,6 +130,8 @@ dependencies {
     // Security
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.security.crypto)
+    implementation(libs.haze)
+    implementation(libs.haze.materials)
 
     // Test
     testImplementation(libs.junit)
