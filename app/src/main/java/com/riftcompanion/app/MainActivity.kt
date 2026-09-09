@@ -303,6 +303,9 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                         DeckDetailScreen(
                             deckId = deckId,
                             onBack = { navController.popBackStack() },
+                            onCardClick = { nameSlug ->
+                                navController.navigate("cardDetail/$nameSlug/false")
+                            },
                         )
                     }
                 }

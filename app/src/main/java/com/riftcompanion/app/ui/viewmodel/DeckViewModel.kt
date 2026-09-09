@@ -1159,6 +1159,45 @@ class DeckViewModel @Inject constructor(
     }
 
     /**
+     * Move a card from one zone to another (e.g. main deck → sideboard).
+     * Removes `quantity` from [fromZone] and adds it to [toZone].
+     */
+    fun moveCardToZone(deckId: String, nameSlug: String, fromZone: DeckZone, toZone: DeckZone, quantity: Int = 1) {
+        viewModelScope.launch {
+            if (fromZone == toZone) return@launch
+            val entries = deckDao.getEntriesForDeck(deckId).toMutableList()
+
+            // Remove from source zone
+            val fromEntry = entries.find { it.nameSlug == nameSlug && it.zone == fromZone.name }
+            if (fromEntry != null) {
+                val newQty = fromEntry.quantity - quantity
+                if (newQty > 0) {
+                    entries[entries.indexOf(fromEntry)] = fromEntry.copy(quantity = newQty)
+                } else {
+                    entries.remove(fromEntry)
+                }
+            }
+
+            // Add to target zone
+            val toEntry = entries.find { it.nameSlug == nameSlug && it.zone == toZone.name }
+            if (toEntry != null) {
+                entries[entries.indexOf(toEntry)] = toEntry.copy(quantity = toEntry.quantity + quantity)
+            } else {
+                entries.add(DeckEntryEntity(
+                    deckId = deckId,
+                    zone = toZone.name,
+                    nameSlug = nameSlug,
+                    quantity = quantity,
+                ))
+            }
+
+            deckDao.deleteEntriesForDeck(deckId)
+            deckDao.insertEntries(entries)
+            updateDeckDetailIncremental(deckId)
+        }
+    }
+
+    /**
      * Remove a card from a deck (reduce quantity or remove entirely).
      * Updates UI state incrementally.
      */

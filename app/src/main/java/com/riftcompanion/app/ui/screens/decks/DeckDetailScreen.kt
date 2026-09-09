@@ -1,6 +1,8 @@
 package com.riftcompanion.app.ui.screens.decks
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,6 +58,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -76,6 +82,7 @@ import com.riftcompanion.app.ui.viewmodel.DeckViewModel
 fun DeckDetailScreen(
     deckId: String,
     onBack: () -> Unit,
+    onCardClick: (String) -> Unit = {},
     viewModel: DeckViewModel = hiltViewModel(),
 ) {
     val detailState by viewModel.deckDetailState.collectAsStateWithLifecycle()
@@ -90,6 +97,9 @@ fun DeckDetailScreen(
     var gridMode by remember { mutableStateOf(false) }
     var showAddCardSheet by remember { mutableStateOf(false) }
     var editingEntry by remember { mutableStateOf<DeckEntryDisplay?>(null) }
+
+    // Drag & drop state: which card is being dragged
+    var draggedCard by remember { mutableStateOf<DeckEntryDisplay?>(null) }
 
     // Track which zones have entries (for auto-selecting missing zones in AddCardSheet)
     val zonesWithCards = detailState.entries.map { it.zone }.toSet()
@@ -206,6 +216,7 @@ fun DeckDetailScreen(
                                         DeckCardGrid(legend,
                                             onAdd = { viewModel.addCardToDeck(deckId, legend.nameSlug, legend.zone) },
                                             onRemove = { viewModel.removeCardFromDeck(deckId, legend.nameSlug, legend.zone) },
+                                            onClick = { onCardClick(legend.nameSlug) },
                                         )
                                     }
                                 } else {
@@ -216,6 +227,7 @@ fun DeckDetailScreen(
                                         DeckCardGrid(champion,
                                             onAdd = { viewModel.addCardToDeck(deckId, champion.nameSlug, champion.zone) },
                                             onRemove = { viewModel.removeCardFromDeck(deckId, champion.nameSlug, champion.zone) },
+                                            onClick = { onCardClick(champion.nameSlug) },
                                         )
                                     }
                                 } else {
@@ -248,6 +260,7 @@ fun DeckDetailScreen(
                                                 DeckCardGrid(entry,
                                                     onAdd = { viewModel.addCardToDeck(deckId, entry.nameSlug, entry.zone) },
                                                     onRemove = { viewModel.removeCardFromDeck(deckId, entry.nameSlug, entry.zone) },
+                                                    onClick = { onCardClick(entry.nameSlug) },
                                                 )
                                             }
                                         }
@@ -270,11 +283,16 @@ fun DeckDetailScreen(
                         val items = grouped[zone]
                         if (!items.isNullOrEmpty()) {
                             item {
-                                Text(
-                                    text = zone.displayName,
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                                // Zone header as a drop target
+                                DropZoneHeader(
+                                    zone = zone,
+                                    draggedCard = draggedCard,
+                                    onDrop = { card ->
+                                        if (card.zone != zone) {
+                                            viewModel.moveCardToZone(deckId, card.nameSlug, card.zone, zone, 1)
+                                        }
+                                        draggedCard = null
+                                    },
                                 )
                             }
                             listItems(items.sortedBy { it.displayName }) { entry ->
@@ -282,6 +300,9 @@ fun DeckDetailScreen(
                                     entry,
                                     onAdd = { viewModel.addCardToDeck(deckId, entry.nameSlug, entry.zone) },
                                     onRemove = { viewModel.removeCardFromDeck(deckId, entry.nameSlug, entry.zone) },
+                                    onClick = { onCardClick(entry.nameSlug) },
+                                    onDragStart = { draggedCard = entry },
+                                    onDragEnd = { draggedCard = null },
                                 )
                             }
                         }
@@ -353,13 +374,25 @@ private fun DeckCardRow(
     entry: DeckEntryDisplay,
     onAdd: () -> Unit,
     onRemove: () -> Unit,
+    onClick: () -> Unit,
+    onDragStart: () -> Unit = {},
+    onDragEnd: () -> Unit = {},
 ) {
     ThemedCardSurface(
         modifier = Modifier.fillMaxWidth(),
         cornerRadius = 12,
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier
+                .padding(12.dp)
+                .clickable(onClick = onClick)
+                .pointerInput(entry.nameSlug) {
+                    detectDragGestures(
+                        onDragStart = { onDragStart() },
+                        onDragEnd = { onDragEnd() },
+                        onDragCancel = { onDragEnd() },
+                    ) { _, _ -> }
+                },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             CardArtwork(
@@ -411,6 +444,51 @@ private fun DeckCardRow(
 }
 
 /**
+ * Zone header that acts as a drop target for drag & drop.
+ * Highlights when a card is being dragged over it.
+ */
+@Composable
+private fun DropZoneHeader(
+    zone: DeckZone,
+    draggedCard: DeckEntryDisplay?,
+    onDrop: (DeckEntryDisplay) -> Unit,
+) {
+    val isHighlighted = draggedCard != null && draggedCard.zone != zone
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                if (isHighlighted) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                else Color.Transparent
+            )
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .pointerInput(zone, draggedCard?.nameSlug) {
+                // When a card is being dragged and the pointer is released over
+                // this header, move the card to this zone.
+                if (draggedCard != null && draggedCard.zone != zone) {
+                    awaitEachGesture {
+                        awaitFirstDown()
+                        do {
+                            val event = awaitPointerEvent()
+                            val released = event.changes.all { !it.pressed }
+                            if (released) {
+                                onDrop(draggedCard)
+                                break
+                            }
+                        } while (true)
+                    }
+                }
+            },
+    ) {
+        Text(
+            text = if (isHighlighted) "Drop here → ${zone.displayName}" else zone.displayName,
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+        )
+    }
+}
+
+/**
  * Grid view card with add/remove buttons.
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
@@ -419,12 +497,17 @@ private fun DeckCardGrid(
     entry: DeckEntryDisplay,
     onAdd: () -> Unit,
     onRemove: () -> Unit,
+    onClick: () -> Unit,
 ) {
     ThemedCardSurface(
         modifier = Modifier,
         cornerRadius = 14,
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(
+            modifier = Modifier
+                .padding(12.dp)
+                .clickable(onClick = onClick),
+        ) {
             Text(entry.displayName, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(8.dp))
             CardArtwork(
