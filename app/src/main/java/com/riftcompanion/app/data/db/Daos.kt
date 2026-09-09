@@ -60,8 +60,17 @@ interface InventoryLineDao {
     @Query("SELECT * FROM inventory_lines WHERE locationName = :locationName")
     suspend fun getByLocation(locationName: String): List<InventoryLineEntity>
 
+    @Query("SELECT * FROM inventory_lines WHERE id = :nameSlug AND locationName = :locationName LIMIT 1")
+    suspend fun getBySlugAndLocation(nameSlug: String, locationName: String): InventoryLineEntity?
+
+    @Query("SELECT * FROM inventory_lines WHERE id = :nameSlug")
+    suspend fun getBySlug(nameSlug: String): List<InventoryLineEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(entities: List<InventoryLineEntity>)
+
+    @Query("UPDATE inventory_lines SET locationName = :newLocation, quantity = :newQty WHERE id = :lineId")
+    suspend fun updateLocationAndQuantity(lineId: String, newLocation: String?, newQty: Int)
 
     @Query("DELETE FROM inventory_lines")
     suspend fun deleteAll()
@@ -106,6 +115,15 @@ interface LocationPolicyDao {
 
     @Query("SELECT * FROM location_policies WHERE normalizedName = :normalizedName")
     suspend fun get(normalizedName: String): LocationPolicyEntity?
+
+    @Query("SELECT * FROM location_policies WHERE kind = :kind")
+    suspend fun getByKind(kind: String): List<LocationPolicyEntity>
+
+    @Query("SELECT * FROM location_policies WHERE kind != 'unavailable' AND hidden = 0")
+    suspend fun getVisibleNonUnavailable(): List<LocationPolicyEntity>
+
+    @Query("SELECT * FROM location_policies WHERE kind = 'storage'")
+    suspend fun getStorageLocations(): List<LocationPolicyEntity>
 }
 
 @Dao

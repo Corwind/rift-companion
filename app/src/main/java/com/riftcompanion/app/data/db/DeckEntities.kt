@@ -24,4 +24,8 @@ data class DeckEntryEntity(
     val preferredProductId: Long? = null,
     val preferredFinish: String? = null,
     val preferredLanguage: String? = null,
+    // Source tracking for deck building — where the card was moved from
+    val sourceLocationName: String? = null,
+    val sourceLineId: String? = null,
+    val isBuilt: Boolean = false,
 )

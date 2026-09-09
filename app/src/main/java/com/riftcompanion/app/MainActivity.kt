@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -55,6 +56,9 @@ import com.riftcompanion.app.security.BiometricHelper
 import com.riftcompanion.app.ui.components.gradientBackground
 import com.riftcompanion.app.ui.screens.carddetail.CardDetailScreen
 import com.riftcompanion.app.ui.screens.catalogue.CatalogueScreen
+import com.riftcompanion.app.ui.screens.decks.DeckDetailScreen
+import com.riftcompanion.app.ui.screens.decks.DeckImportScreen
+import com.riftcompanion.app.ui.screens.decks.DeckListScreen
 import com.riftcompanion.app.ui.screens.inventory.InventoryScreen
 import com.riftcompanion.app.ui.screens.locations.LocationsScreen
 import com.riftcompanion.app.ui.screens.lock.LockScreen
@@ -98,19 +102,21 @@ class MainActivity : FragmentActivity() {
 }
 
 private data class NavItem(
-    val route: String,
+    val route: String,          // pattern for currentRoute matching
     val label: String,
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val navigateRoute: String = route,  // actual route to navigate to
 )
 
 private val navItems = listOf(
-    NavItem("inventory?location={location}", "Inventory", Icons.Default.GridView),
+    NavItem("decks", "Decks", Icons.Default.Style),
+    NavItem("inventory?location={location}", "Inventory", Icons.Default.GridView, "inventory"),
     NavItem("catalogue", "Catalog", Icons.Default.Apps),
     NavItem("locations", "Locations", Icons.Default.Place),
     NavItem("settings", "Settings", Icons.Default.Settings),
 )
 
-private val mainRoutes = setOf("inventory?location={location}", "catalogue", "locations", "settings")
+private val mainRoutes = setOf("decks", "inventory?location={location}", "catalogue", "locations", "settings")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -207,7 +213,7 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
             ) {
                 NavHost(
                     navController = navController,
-                    startDestination = "inventory?location={location}",
+                    startDestination = "decks",
                     modifier = Modifier
                         .fillMaxSize()
                         .hazeSource(hazeState),
@@ -258,6 +264,36 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                     composable("settings") {
                         SettingsScreen()
                     }
+                    composable("decks") {
+                        DeckListScreen(
+                            onDeckClick = { deckId ->
+                                navController.navigate("deckDetail/$deckId")
+                            },
+                            onImportClick = {
+                                navController.navigate("deckImport")
+                            },
+                            onCreateFromLocation = {
+                                navController.navigate("deckFromLocation")
+                            },
+                        )
+                    }
+                    composable("deckImport") {
+                        DeckImportScreen(
+                            onBack = { navController.popBackStack() },
+                            onImported = { deckId ->
+                                navController.navigate("deckDetail/$deckId") {
+                                    popUpTo("decks")
+                                }
+                            },
+                        )
+                    }
+                    composable("deckDetail/{deckId}") { backStackEntry ->
+                        val deckId = backStackEntry.arguments?.getString("deckId") ?: ""
+                        DeckDetailScreen(
+                            deckId = deckId,
+                            onBack = { navController.popBackStack() },
+                        )
+                    }
                 }
 
                 if (showBottomBar) {
@@ -265,7 +301,7 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                         items = navItems,
                         currentRoute = currentRoute,
                         onNavigate = { item ->
-                            navController.navigate(item.route) {
+                            navController.navigate(item.navigateRoute) {
                                 popUpTo(navController.graph.findStartDestination().id) {
                                     saveState = true
                                 }
