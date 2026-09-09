@@ -18,6 +18,7 @@ import com.riftcompanion.app.data.deck.DeckRulesEngine
 import com.riftcompanion.app.data.deck.RiftDeckParser
 import com.riftcompanion.app.data.deck.TextDeckParser
 import com.riftcompanion.app.domain.model.CardIdentityInfo
+import com.riftcompanion.app.domain.model.DeckAvailability
 import com.riftcompanion.app.domain.model.DeckZone
 import com.riftcompanion.app.domain.model.ValidationSeverity
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -224,16 +225,16 @@ class DeckViewModel @Inject constructor(
                     ?: printings.firstOrNull()?.imageURL
                 // Find all inventory lines for this card
                 val allLines = inventoryLineDao.getLinesByCardSlug(entry.nameSlug)
-                val inStorage = allLines.filter { it.locationName in storageLocations }.sumOf { it.quantity }
-                // Cards already at the deck location count as available
-                val inDeckLocation = allLines.filter { it.locationName == linkedLoc }.sumOf { it.quantity }
-                val inDecks = allLines.filter { it.locationName in deckLocations && it.locationName != linkedLoc }.sumOf { it.quantity }
-                val total = allLines.sumOf { it.quantity }
                 val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
-                // Runes and battlefields are never missing
-                val isRuneOrBattlefield = zone == DeckZone.rune || zone == DeckZone.battlefield
-                val availableTotal = if (isRuneOrBattlefield) entry.quantity else inStorage + inDeckLocation
-                val missing = if (isRuneOrBattlefield) 0 else maxOf(0, entry.quantity - availableTotal)
+                val availability = DeckAvailability.compute(
+                    quantity = entry.quantity,
+                    zone = zone,
+                    lineLocations = allLines.map { it.locationName },
+                    lineQuantities = allLines.map { it.quantity },
+                    storageLocations = storageLocations,
+                    deckLocations = deckLocations,
+                    linkedLocation = linkedLoc,
+                )
 
                 DeckEntryDisplay(
                     entryId = entry.id,
@@ -246,11 +247,11 @@ class DeckViewModel @Inject constructor(
                     expansion = printings.firstOrNull()?.expansionSlug,
                     rarity = printings.firstOrNull()?.rarity,
                     domains = identity?.tagsCsv?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
-                    availableInStorage = if (isRuneOrBattlefield) entry.quantity else inStorage + inDeckLocation,
-                    inOtherDecks = if (isRuneOrBattlefield) 0 else inDecks,
-                    totalOwned = if (isRuneOrBattlefield) entry.quantity else total,
-                    isMissing = missing > 0,
-                    missingCount = missing,
+                    availableInStorage = availability.availableInStorage,
+                    inOtherDecks = availability.inOtherDecks,
+                    totalOwned = availability.totalOwned,
+                    isMissing = availability.isMissing,
+                    missingCount = availability.missingCount,
                 )
             }
             // Compute legality
@@ -574,7 +575,34 @@ class DeckViewModel @Inject constructor(
                             quantity = group.sumOf { it.second },
                         )
                     }
-                entries.addAll(otherCards)
+
+                // Main deck is capped at 39 cards (40 with the champion).
+                // Any main-deck cards beyond 39 overflow into the sideboard.
+                val mainDeckEntries = otherCards.filter { it.zone == DeckZone.main.name }
+                val mainDeckTotal = mainDeckEntries.sumOf { it.quantity }
+                val mainDeckCap = 39
+                if (mainDeckTotal > mainDeckCap) {
+                    // Distribute overflow to sideboard: reduce main deck cards one by one
+                    var overflow = mainDeckTotal - mainDeckCap
+                    val adjustedMain = mainDeckEntries.map { entry ->
+                        val take = minOf(overflow, entry.quantity)
+                        overflow -= take
+                        if (take > 0) entry.copy(quantity = entry.quantity - take) else entry
+                    }.filter { it.quantity > 0 }
+                    val sideboardOverflow = mainDeckEntries.map { entry ->
+                        val inMain = adjustedMain.find { it.nameSlug == entry.nameSlug }?.quantity ?: 0
+                        val movedToSideboard = entry.quantity - inMain
+                        if (movedToSideboard > 0) entry.copy(zone = DeckZone.sideboard.name, quantity = movedToSideboard) else null
+                    }.filterNotNull()
+
+                    // Replace main deck entries with adjusted ones + sideboard overflow
+                    val otherZones = otherCards.filter { it.zone != DeckZone.main.name }
+                    entries.addAll(otherZones)
+                    entries.addAll(adjustedMain)
+                    entries.addAll(sideboardOverflow)
+                } else {
+                    entries.addAll(otherCards)
+                }
 
                 deckDao.insertEntries(entries)
 
@@ -1062,14 +1090,16 @@ class DeckViewModel @Inject constructor(
             val imageURL = printings.firstOrNull { !it.imageURL.isNullOrEmpty() }?.imageURL
                 ?: printings.firstOrNull()?.imageURL
             val allLines = inventoryLineDao.getLinesByCardSlug(entry.nameSlug)
-            val inStorage = allLines.filter { it.locationName in storageLocations }.sumOf { it.quantity }
-            val inDeckLocation = allLines.filter { it.locationName == linkedLoc }.sumOf { it.quantity }
-            val inDecks = allLines.filter { it.locationName in deckLocations && it.locationName != linkedLoc }.sumOf { it.quantity }
-            val total = allLines.sumOf { it.quantity }
             val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
-            val isRuneOrBattlefield = zone == DeckZone.rune || zone == DeckZone.battlefield
-            val availableTotal = if (isRuneOrBattlefield) entry.quantity else inStorage + inDeckLocation
-            val missing = if (isRuneOrBattlefield) 0 else maxOf(0, entry.quantity - availableTotal)
+            val availability = DeckAvailability.compute(
+                quantity = entry.quantity,
+                zone = zone,
+                lineLocations = allLines.map { it.locationName },
+                lineQuantities = allLines.map { it.quantity },
+                storageLocations = storageLocations,
+                deckLocations = deckLocations,
+                linkedLocation = linkedLoc,
+            )
 
             DeckEntryDisplay(
                 entryId = entry.id,
@@ -1082,11 +1112,11 @@ class DeckViewModel @Inject constructor(
                 expansion = printings.firstOrNull()?.expansionSlug,
                 rarity = printings.firstOrNull()?.rarity,
                 domains = identity?.tagsCsv?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
-                availableInStorage = if (isRuneOrBattlefield) entry.quantity else inStorage + inDeckLocation,
-                inOtherDecks = if (isRuneOrBattlefield) 0 else inDecks,
-                totalOwned = if (isRuneOrBattlefield) entry.quantity else total,
-                isMissing = missing > 0,
-                missingCount = missing,
+                availableInStorage = availability.availableInStorage,
+                inOtherDecks = availability.inOtherDecks,
+                totalOwned = availability.totalOwned,
+                isMissing = availability.isMissing,
+                missingCount = availability.missingCount,
             )
         }
 

@@ -92,25 +92,27 @@ class DtoMapperTest {
         assertEquals("Box A", domain.name)
         assertEquals("blue", domain.color)
         assertEquals("shippingbox", domain.icon)
-        assertEquals("box a", domain.normalizedName)
+        // Identity is the exact name, not normalized
+        assertEquals("Box A", domain.id)
     }
 
     @Test
-    fun `InventoryLocation normalizes empty name to __unlocated__`() {
-        val loc = InventoryLocation(name = "")
-        assertEquals("__unlocated__", loc.normalizedName)
-    }
-
-    @Test
-    fun `InventoryLocation normalizes whitespace name to __unlocated__`() {
-        val loc = InventoryLocation(name = "   ")
-        assertEquals("__unlocated__", loc.normalizedName)
-    }
-
-    @Test
-    fun `InventoryLocation normalizes mixed case to lowercase`() {
+    fun `InventoryLocation preserves exact name as identity`() {
         val loc = InventoryLocation(name = "Box A")
-        assertEquals("box a", loc.normalizedName)
+        assertEquals("Box A", loc.id)
+    }
+
+    @Test
+    fun `InventoryLocation preserves case in identity`() {
+        val loc = InventoryLocation(name = "Vi deck")
+        assertEquals("Vi deck", loc.id)
+    }
+
+    @Test
+    fun `InventoryLocation distinct names stay distinct`() {
+        val a = InventoryLocation(name = "Vi deck")
+        val b = InventoryLocation(name = "vi Deck")
+        assert(a.id != b.id)
     }
 
     @Test

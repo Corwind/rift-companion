@@ -1,44 +1,43 @@
 package com.riftcompanion.app.domain.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * Non-regression tests for InventoryLocation normalization — the bug
- * where URLEncoder produces '+' for spaces caused NOT_FOUND errors.
- * These tests ensure the normalize() logic stays correct.
+ * Non-regression tests for InventoryLocation identity.
+ *
+ * Locations use the EXACT name from the API as their identity — NOT a
+ * normalized/lowercased transformation. This was a deliberate change:
+ * normalizing "Vi deck" and "vi Deck" to the same key would incorrectly
+ * merge two distinct locations.
  */
 class InventoryLocationTest {
 
     @Test
-    fun `normalize lowercases the name`() {
-        assertEquals("box a", InventoryLocation.normalize("Box A"))
+    fun `id is the exact name`() {
+        val loc = InventoryLocation(name = "Vi deck")
+        assertEquals("Vi deck", loc.id)
     }
 
     @Test
-    fun `normalize trims whitespace`() {
-        assertEquals("box a", InventoryLocation.normalize("  Box A  "))
+    fun `id preserves case`() {
+        val loc = InventoryLocation(name = "vi Deck")
+        assertEquals("vi Deck", loc.id)
     }
 
     @Test
-    fun `normalize returns __unlocated__ for null`() {
-        assertEquals("__unlocated__", InventoryLocation.normalize(null))
+    fun `two locations with different case are distinct`() {
+        val a = InventoryLocation(name = "Vi deck")
+        val b = InventoryLocation(name = "vi Deck")
+        // Distinct names must NOT collapse to the same identity
+        assert(a.id != b.id)
     }
 
     @Test
-    fun `normalize returns __unlocated__ for empty string`() {
-        assertEquals("__unlocated__", InventoryLocation.normalize(""))
-    }
-
-    @Test
-    fun `normalize returns __unlocated__ for whitespace-only string`() {
-        assertEquals("__unlocated__", InventoryLocation.normalize("   "))
-    }
-
-    @Test
-    fun `normalizedName property matches companion normalize`() {
-        val loc = InventoryLocation(name = "Trade Binder")
-        assertEquals(InventoryLocation.normalize("Trade Binder"), loc.normalizedName)
-        assertEquals("trade binder", loc.normalizedName)
+    fun `color and icon are preserved`() {
+        val loc = InventoryLocation(name = "Red box", color = "#ff0000", icon = "box")
+        assertEquals("#ff0000", loc.color)
+        assertEquals("box", loc.icon)
     }
 }

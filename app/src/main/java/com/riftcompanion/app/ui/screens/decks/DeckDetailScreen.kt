@@ -2,7 +2,7 @@ package com.riftcompanion.app.ui.screens.decks
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,15 +53,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -98,8 +99,26 @@ fun DeckDetailScreen(
     var showAddCardSheet by remember { mutableStateOf(false) }
     var editingEntry by remember { mutableStateOf<DeckEntryDisplay?>(null) }
 
-    // Drag & drop state: which card is being dragged
+    // Drag & drop state: which card is being dragged and its current position
     var draggedCard by remember { mutableStateOf<DeckEntryDisplay?>(null) }
+    var dragPosition by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    // Bounds of the main/sideboard drop zones, keyed by zone
+    val dropZoneBounds = remember { mutableStateMapOf<DeckZone, androidx.compose.ui.geometry.Rect>() }
+
+    // On drag end, check which drop zone the pointer is over and move the card there
+    fun handleDragEnd() {
+        val card = draggedCard ?: return
+        val isMainSideboard = card.zone == DeckZone.main || card.zone == DeckZone.sideboard
+        if (isMainSideboard) {
+            val targetZone = dropZoneBounds.entries.firstOrNull { (zone, bounds) ->
+                zone != card.zone && bounds.contains(dragPosition)
+            }?.key
+            if (targetZone != null) {
+                viewModel.moveCardToZone(deckId, card.nameSlug, card.zone, targetZone, 1)
+            }
+        }
+        draggedCard = null
+    }
 
     // Track which zones have entries (for auto-selecting missing zones in AddCardSheet)
     val zonesWithCards = detailState.entries.map { it.zone }.toSet()
@@ -283,17 +302,23 @@ fun DeckDetailScreen(
                         val items = grouped[zone]
                         if (!items.isNullOrEmpty()) {
                             item {
-                                // Zone header as a drop target
-                                DropZoneHeader(
-                                    zone = zone,
-                                    draggedCard = draggedCard,
-                                    onDrop = { card ->
-                                        if (card.zone != zone) {
-                                            viewModel.moveCardToZone(deckId, card.nameSlug, card.zone, zone, 1)
-                                        }
-                                        draggedCard = null
-                                    },
-                                )
+                                // Only Main Deck and Sideboard are drag & drop zones
+                                if (zone == DeckZone.main || zone == DeckZone.sideboard) {
+                                    DropZoneHeader(
+                                        zone = zone,
+                                        draggedCard = draggedCard,
+                                        onBoundsChanged = { bounds ->
+                                            dropZoneBounds[zone] = bounds
+                                        },
+                                    )
+                                } else {
+                                    Text(
+                                        text = zone.displayName,
+                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                                    )
+                                }
                             }
                             listItems(items.sortedBy { it.displayName }) { entry ->
                                 DeckCardRow(
@@ -301,8 +326,14 @@ fun DeckDetailScreen(
                                     onAdd = { viewModel.addCardToDeck(deckId, entry.nameSlug, entry.zone) },
                                     onRemove = { viewModel.removeCardFromDeck(deckId, entry.nameSlug, entry.zone) },
                                     onClick = { onCardClick(entry.nameSlug) },
-                                    onDragStart = { draggedCard = entry },
-                                    onDragEnd = { draggedCard = null },
+                                    // Only main deck and sideboard cards are draggable
+                                    onDragStart = {
+                                        if (entry.zone == DeckZone.main || entry.zone == DeckZone.sideboard) {
+                                            draggedCard = entry
+                                        }
+                                    },
+                                    onDragPosition = { dragPosition = it },
+                                    onDragEnd = { handleDragEnd() },
                                 )
                             }
                         }
@@ -376,6 +407,7 @@ private fun DeckCardRow(
     onRemove: () -> Unit,
     onClick: () -> Unit,
     onDragStart: () -> Unit = {},
+    onDragPosition: (androidx.compose.ui.geometry.Offset) -> Unit = {},
     onDragEnd: () -> Unit = {},
 ) {
     ThemedCardSurface(
@@ -387,11 +419,14 @@ private fun DeckCardRow(
                 .padding(12.dp)
                 .clickable(onClick = onClick)
                 .pointerInput(entry.nameSlug) {
-                    detectDragGestures(
+                    detectDragGesturesAfterLongPress(
                         onDragStart = { onDragStart() },
                         onDragEnd = { onDragEnd() },
                         onDragCancel = { onDragEnd() },
-                    ) { _, _ -> }
+                    ) { change, _ ->
+                        change.consume()
+                        onDragPosition(change.position)
+                    }
                 },
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -445,44 +480,41 @@ private fun DeckCardRow(
 
 /**
  * Zone header that acts as a drop target for drag & drop.
- * Highlights when a card is being dragged over it.
+ * Records its screen bounds so the dragged card's position can be
+ * checked against them on drop. Only Main Deck and Sideboard are targets.
  */
 @Composable
 private fun DropZoneHeader(
     zone: DeckZone,
     draggedCard: DeckEntryDisplay?,
-    onDrop: (DeckEntryDisplay) -> Unit,
+    onBoundsChanged: (androidx.compose.ui.geometry.Rect) -> Unit,
 ) {
-    val isHighlighted = draggedCard != null && draggedCard.zone != zone
+    val isDragging = draggedCard != null &&
+        (draggedCard.zone == DeckZone.main || draggedCard.zone == DeckZone.sideboard) &&
+        draggedCard.zone != zone
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .onGloballyPositioned { coords ->
+                onBoundsChanged(
+                    androidx.compose.ui.geometry.Rect(
+                        coords.positionInRoot().x,
+                        coords.positionInRoot().y,
+                        coords.positionInRoot().x + coords.size.width,
+                        coords.positionInRoot().y + coords.size.height,
+                    ),
+                )
+            }
             .clip(RoundedCornerShape(8.dp))
             .background(
-                if (isHighlighted) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                if (isDragging) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                 else Color.Transparent
             )
-            .padding(horizontal = 8.dp, vertical = 6.dp)
-            .pointerInput(zone, draggedCard?.nameSlug) {
-                // When a card is being dragged and the pointer is released over
-                // this header, move the card to this zone.
-                if (draggedCard != null && draggedCard.zone != zone) {
-                    awaitEachGesture {
-                        awaitFirstDown()
-                        do {
-                            val event = awaitPointerEvent()
-                            val released = event.changes.all { !it.pressed }
-                            if (released) {
-                                onDrop(draggedCard)
-                                break
-                            }
-                        } while (true)
-                    }
-                }
-            },
+            .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
         Text(
-            text = if (isHighlighted) "Drop here → ${zone.displayName}" else zone.displayName,
+            text = if (isDragging) "Drop here → ${zone.displayName}" else zone.displayName,
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
         )
     }
