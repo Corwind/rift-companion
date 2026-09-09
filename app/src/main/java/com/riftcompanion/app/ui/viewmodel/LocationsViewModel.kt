@@ -55,7 +55,7 @@ class LocationsViewModel @Inject constructor(
         _message,
     ) { policies, inventoryCards, message ->
         val cardCounts = inventoryCards.flatMap { it.locations }
-            .groupBy { it.normalizedLocationName }
+            .groupBy { it.locationName }
             .mapValues { (_, locs) -> locs.sumOf { it.quantity } }
 
         LocationsUiState(
@@ -139,7 +139,7 @@ class LocationsViewModel @Inject constructor(
                     onSuccess = { updated ->
                         repository.updateLocationPolicy(
                             LocationPolicy(
-                                normalizedName = updated.normalizedName,
+                                name = updated.name,
                                 displayName = updated.name,
                                 color = updated.color,
                                 icon = updated.icon,
@@ -160,7 +160,7 @@ class LocationsViewModel @Inject constructor(
                 // Only local fields changed (kind, hidden) — no API call needed
                 repository.updateLocationPolicy(
                     LocationPolicy(
-                        normalizedName = location.normalizedName,
+                        name = location.name,
                         displayName = location.displayName,
                         color = location.color,
                         icon = location.icon,
@@ -184,7 +184,7 @@ class LocationsViewModel @Inject constructor(
             val result = repository.deleteLocation(location.displayName)
             result.fold(
                 onSuccess = {
-                    repository.deleteLocationPolicy(location.normalizedName)
+                    repository.deleteLocationPolicy(location.name)
                     _message.value = "Deleted '${location.displayName}' from CardNexus."
                     _editState.value = LocationEditState()
                 },
@@ -205,7 +205,7 @@ class LocationsViewModel @Inject constructor(
                     // Auto-create a local policy
                     repository.updateLocationPolicy(
                         LocationPolicy(
-                            normalizedName = created.normalizedName,
+                            name = created.name,
                             displayName = created.name,
                             color = created.color,
                             icon = created.icon,

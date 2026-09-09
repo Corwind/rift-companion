@@ -109,6 +109,7 @@ object EntityConverter {
             condition = line.condition,
             language = line.language,
             quantity = line.quantity,
+            // Use the exact location name from the API as identity (no normalization)
             locationName = line.location,
             tagsCsv = line.tags.joinToString(","),
             comment = line.comment,
@@ -140,7 +141,7 @@ object EntityConverter {
 
     fun toEntity(location: InventoryLocation): InventoryLocationEntity {
         return InventoryLocationEntity(
-            normalizedName = location.normalizedName,
+            name = location.name,
             displayName = location.name,
             color = location.color,
             icon = location.icon,
@@ -149,7 +150,7 @@ object EntityConverter {
 
     fun toDomain(entity: InventoryLocationEntity): InventoryLocation {
         return InventoryLocation(
-            name = entity.displayName,
+            name = entity.name,
             color = entity.color,
             icon = entity.icon,
         )

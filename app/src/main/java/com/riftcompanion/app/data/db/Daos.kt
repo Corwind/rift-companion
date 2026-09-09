@@ -69,6 +69,12 @@ interface InventoryLineDao {
     @Query("SELECT * FROM inventory_lines WHERE id = :nameSlug")
     suspend fun getBySlug(nameSlug: String): List<InventoryLineEntity>
 
+    // Find inventory lines by card nameSlug via the printings join.
+    // This works for ALL lines regardless of their id format (synced lines use
+    // the nameSlug as id, but deck-location lines use composite ids).
+    @Query("SELECT il.* FROM inventory_lines il INNER JOIN card_printings cp ON cp.productID = il.productId WHERE cp.nameSlug = :nameSlug")
+    suspend fun getLinesByCardSlug(nameSlug: String): List<InventoryLineEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(entities: List<InventoryLineEntity>)
 
@@ -113,11 +119,11 @@ interface LocationPolicyDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: LocationPolicyEntity)
 
-    @Query("DELETE FROM location_policies WHERE normalizedName = :normalizedName")
-    suspend fun delete(normalizedName: String)
+    @Query("DELETE FROM location_policies WHERE name = :name")
+    suspend fun delete(name: String)
 
-    @Query("SELECT * FROM location_policies WHERE normalizedName = :normalizedName")
-    suspend fun get(normalizedName: String): LocationPolicyEntity?
+    @Query("SELECT * FROM location_policies WHERE name = :name")
+    suspend fun get(name: String): LocationPolicyEntity?
 
     @Query("SELECT * FROM location_policies WHERE kind = :kind")
     suspend fun getByKind(kind: String): List<LocationPolicyEntity>
@@ -128,7 +134,7 @@ interface LocationPolicyDao {
     @Query("SELECT * FROM location_policies WHERE kind = 'storage'")
     suspend fun getStorageLocations(): List<LocationPolicyEntity>
 
-    @Query("SELECT * FROM location_policies WHERE normalizedName = :name LIMIT 1")
+    @Query("SELECT * FROM location_policies WHERE name = :name LIMIT 1")
     suspend fun getByName(name: String): LocationPolicyEntity?
 }
 

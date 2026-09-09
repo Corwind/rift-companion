@@ -145,9 +145,9 @@ fun LocationsScreen(
                 items(uiState.locations, key = { it.id }) { location ->
                     LocationRow(
                         location = location,
-                        cardCount = uiState.cardCountsByLocation[location.normalizedName] ?: 0,
-                        onClick = { onLocationClick(location.normalizedName) },
-                        onEdit = { viewModel.startEdit(location, uiState.cardCountsByLocation[location.normalizedName] ?: 0) },
+                        cardCount = uiState.cardCountsByLocation[location.name] ?: 0,
+                        onClick = { onLocationClick(location.name) },
+                        onEdit = { viewModel.startEdit(location, uiState.cardCountsByLocation[location.name] ?: 0) },
                         onToggleHidden = { viewModel.toggleHidden(location) },
                     )
                 }

@@ -61,7 +61,7 @@ class InventoryViewModel @Inject constructor(
 
         val filtered = cards.filter { card ->
             val matchesLocation = location?.let { loc ->
-                card.locations.any { it.normalizedLocationName == loc && it.quantity > 0 }
+                card.locations.any { it.locationName == loc && it.quantity > 0 }
             } ?: true
 
             val matchesDomains = domains.isEmpty() ||
@@ -90,16 +90,16 @@ class InventoryViewModel @Inject constructor(
             matchesDomains && matchesSearch
         }
         val countsByLocation = visibleLocations.associate { loc ->
-            loc.normalizedName to preFilterForCounts.filter { card ->
-                card.locations.any { it.normalizedLocationName == loc.normalizedName && it.quantity > 0 }
-            }.sumOf { card -> card.locations.filter { it.normalizedLocationName == loc.normalizedName }.sumOf { it.quantity } }
+            loc.name to preFilterForCounts.filter { card ->
+                card.locations.any { it.locationName == loc.name && it.quantity > 0 }
+            }.sumOf { card -> card.locations.filter { it.locationName == loc.name }.sumOf { it.quantity } }
         }
         val allLocationsCount = preFilterForCounts.sumOf { it.availability.totalOwned }
 
         // The count shown in the title: total quantity at the selected location,
         // or total across all locations if none selected
         val displayedCount = if (location != null) {
-            filtered.sumOf { card -> card.locations.filter { it.normalizedLocationName == location }.sumOf { it.quantity } }
+            filtered.sumOf { card -> card.locations.filter { it.locationName == location }.sumOf { it.quantity } }
         } else {
             filtered.sumOf { it.availability.totalOwned }
         }

@@ -91,12 +91,12 @@ class RiftRepository @Inject constructor(
 
             // 5. Auto-create location policies for new locations
             val existingPolicies = locationPolicyDao.getAll().first()
-            val existingNames = existingPolicies.map { it.normalizedName }.toSet()
+            val existingNames = existingPolicies.map { it.name }.toSet()
             locations.forEach { loc ->
-                if (loc.normalizedName !in existingNames && loc.normalizedName != "__unlocated__") {
+                if (loc.name !in existingNames) {
                     locationPolicyDao.upsert(
                         com.riftcompanion.app.data.db.LocationPolicyEntity(
-                            normalizedName = loc.normalizedName,
+                            name = loc.name,
                             displayName = loc.name,
                             color = loc.color,
                             icon = loc.icon,
@@ -158,7 +158,7 @@ class RiftRepository @Inject constructor(
         return locationPolicyDao.getAll().map { entities ->
             entities.map { e ->
                 LocationPolicy(
-                    normalizedName = e.normalizedName,
+                    name = e.name,
                     displayName = e.displayName,
                     color = e.color,
                     icon = e.icon,
@@ -173,7 +173,7 @@ class RiftRepository @Inject constructor(
     suspend fun updateLocationPolicy(policy: LocationPolicy) = withContext(Dispatchers.IO) {
         locationPolicyDao.upsert(
             com.riftcompanion.app.data.db.LocationPolicyEntity(
-                normalizedName = policy.normalizedName,
+                name = policy.name,
                 displayName = policy.displayName,
                 color = policy.color,
                 icon = policy.icon,
@@ -184,8 +184,8 @@ class RiftRepository @Inject constructor(
         )
     }
 
-    suspend fun deleteLocationPolicy(normalizedName: String) = withContext(Dispatchers.IO) {
-        locationPolicyDao.delete(normalizedName)
+    suspend fun deleteLocationPolicy(name: String) = withContext(Dispatchers.IO) {
+        locationPolicyDao.delete(name)
     }
 
     // ── Credential verification ──────────────────────────────────────────
@@ -225,7 +225,7 @@ class RiftRepository @Inject constructor(
         val identityMap = identities.associateBy { it.nameSlug }
         val printingsByName = printings.groupBy { it.nameSlug }
         val availabilityMap = buildAvailabilityMap(lines, policies, printings)
-        val locationDisplayMap = locations.associateBy { it.normalizedName }
+        val locationDisplayMap = locations.associateBy { it.name }
 
         return identities.map { entity ->
             val identity = EntityConverter.toDomain(entity)
@@ -262,8 +262,8 @@ class RiftRepository @Inject constructor(
         val identityMap = identities.associateBy { it.nameSlug }
         val printingsByProduct = printings.associateBy { it.productID }
         val printingsByName = printings.groupBy { it.nameSlug }
-        val policyMap = policies.associateBy { it.normalizedName }
-        val locationDisplayMap = locations.associateBy { it.normalizedName }
+        val policyMap = policies.associateBy { it.name }
+        val locationDisplayMap = locations.associateBy { it.name }
 
         // Group inventory lines by nameSlug (via productID → printing → nameSlug)
         val linesByName = lines.groupBy { line ->
@@ -280,12 +280,12 @@ class RiftRepository @Inject constructor(
             // Build availability
             val totalOwned = cardLines.sumOf { it.quantity }
             val locationQuantities = cardLines.filter { it.quantity > 0 }
-                .groupBy { com.riftcompanion.app.domain.model.InventoryLocation.normalize(it.locationName) }
-                .map { (normName, locLines) ->
-                    val policy = policyMap[normName]
-                    val locEntity = locationDisplayMap[normName]
+                .groupBy { it.locationName ?: "Unlocated" }
+                .map { (locName, locLines) ->
+                    val policy = policyMap[locName]
+                    val locEntity = locationDisplayMap[locName]
                     LocationQuantity(
-                        normalizedLocationName = normName,
+                        locationName = locName,
                         displayName = locEntity?.displayName ?: policy?.displayName ?: locLines.firstOrNull()?.locationName ?: "Unlocated",
                         color = policy?.color ?: locEntity?.color,
                         icon = policy?.icon ?: locEntity?.icon,
@@ -325,7 +325,7 @@ class RiftRepository @Inject constructor(
         policies: List<com.riftcompanion.app.data.db.LocationPolicyEntity>,
         printings: List<com.riftcompanion.app.data.db.CardPrintingEntity>,
     ): Map<String, CardAvailability> {
-        val policyMap = policies.associateBy { it.normalizedName }
+        val policyMap = policies.associateBy { it.name }
         val productToNameSlug = printings.associate { it.productID to it.nameSlug }
         return lines.groupBy { productToNameSlug[it.productId] ?: "" }
             .filterKeys { it.isNotEmpty() }
@@ -333,8 +333,7 @@ class RiftRepository @Inject constructor(
                 val total = productLines.sumOf { it.quantity }
                 val available = productLines
                     .filter { line ->
-                        val normName = com.riftcompanion.app.domain.model.InventoryLocation.normalize(line.locationName)
-                        val policy = policyMap[normName]
+                        val policy = policyMap[line.locationName]
                         policy?.countsAsAvailable ?: true
                     }
                     .sumOf { it.quantity }

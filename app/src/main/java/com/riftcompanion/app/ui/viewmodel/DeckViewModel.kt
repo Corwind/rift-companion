@@ -212,8 +212,8 @@ class DeckViewModel @Inject constructor(
             val allPrintings = cardPrintingDao.getAll().first().groupBy { it.nameSlug }
 
             // Get storage locations and deck locations
-            val storageLocations = locationPolicyDao.getStorageLocations().map { it.normalizedName }.toSet()
-            val deckLocations = locationPolicyDao.getByKind("deck").map { it.normalizedName }.toSet()
+            val storageLocations = locationPolicyDao.getStorageLocations().map { it.name }.toSet()
+            val deckLocations = locationPolicyDao.getByKind("deck").map { it.name }.toSet()
 
             // For each entry, compute availability
             val linkedLoc = deck?.linkedLocationName
@@ -223,7 +223,7 @@ class DeckViewModel @Inject constructor(
                 val imageURL = printings.firstOrNull { !it.imageURL.isNullOrEmpty() }?.imageURL
                     ?: printings.firstOrNull()?.imageURL
                 // Find all inventory lines for this card
-                val allLines = inventoryLineDao.getBySlug(entry.nameSlug)
+                val allLines = inventoryLineDao.getLinesByCardSlug(entry.nameSlug)
                 val inStorage = allLines.filter { it.locationName in storageLocations }.sumOf { it.quantity }
                 // Cards already at the deck location count as available
                 val inDeckLocation = allLines.filter { it.locationName == linkedLoc }.sumOf { it.quantity }
@@ -551,8 +551,9 @@ class DeckViewModel @Inject constructor(
                     ))
                 }
 
-                // Add all other cards to main deck (excluding legend and champion)
-                val mainDeckCards = lines
+                // Classify remaining cards by type: runes → rune zone, battlefields → battlefield zone, rest → main deck
+                val identities = cardIdentityDao.getAll().first().associateBy { it.nameSlug }
+                val otherCards = lines
                     .mapNotNull { line ->
                         val nameSlug = printingsByProductId[line.productId]?.nameSlug ?: return@mapNotNull null
                         nameSlug to line.quantity
@@ -560,14 +561,20 @@ class DeckViewModel @Inject constructor(
                     .filter { it.first != legendNameSlug && it.first != championNameSlug }
                     .groupBy { it.first }
                     .map { (nameSlug, group) ->
+                        val cardType = identities[nameSlug]?.cardType?.lowercase() ?: ""
+                        val zone = when {
+                            cardType.contains("rune") -> DeckZone.rune
+                            cardType.contains("battlefield") -> DeckZone.battlefield
+                            else -> DeckZone.main
+                        }
                         DeckEntryEntity(
                             deckId = deckId,
-                            zone = DeckZone.main.name,
+                            zone = zone.name,
                             nameSlug = nameSlug,
                             quantity = group.sumOf { it.second },
                         )
                     }
-                entries.addAll(mainDeckCards)
+                entries.addAll(otherCards)
 
                 deckDao.insertEntries(entries)
 
@@ -759,7 +766,7 @@ class DeckViewModel @Inject constructor(
 
                 // Get all storage locations
                 val storageLocations = locationPolicyDao.getStorageLocations()
-                val storageLocationNames = storageLocations.map { it.normalizedName }.toSet()
+                val storageLocationNames = storageLocations.map { it.name }.toSet()
 
                 // For each deck entry, find available cards in storage
                 // Runes and battlefields are always available — they don't need to be in inventory
@@ -772,7 +779,7 @@ class DeckViewModel @Inject constructor(
                     val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
 
                     // Find all inventory lines for this card in storage locations
-                    val lines = inventoryLineDao.getBySlug(entry.nameSlug)
+                    val lines = inventoryLineDao.getLinesByCardSlug(entry.nameSlug)
                         .filter { it.locationName in storageLocationNames }
                         .sortedBy { it.locationName }
 
@@ -835,7 +842,7 @@ class DeckViewModel @Inject constructor(
                 // Create deck location if new
                 if (preview.isNewLocation) {
                     locationPolicyDao.upsert(LocationPolicyEntity(
-                        normalizedName = deckLocationNormalized,
+                        name = deckLocationNormalized,
                         displayName = preview.deckLocationName,
                         color = null,
                         icon = null,
@@ -846,7 +853,7 @@ class DeckViewModel @Inject constructor(
                     ))
                     inventoryLocationDao.insertAll(listOf(
                         InventoryLocationEntity(
-                            normalizedName = deckLocationNormalized,
+                            name = deckLocationNormalized,
                             displayName = preview.deckLocationName,
                             color = null,
                             icon = null,
@@ -857,7 +864,7 @@ class DeckViewModel @Inject constructor(
                 // Move cards and record source tracking
                 val updatedEntries = mutableListOf<DeckEntryEntity>()
                 for (movement in preview.movements) {
-                    val sourceLines = inventoryLineDao.getBySlug(movement.nameSlug)
+                    val sourceLines = inventoryLineDao.getLinesByCardSlug(movement.nameSlug)
                         .filter { it.locationName == movement.fromLocation }
                         .sortedBy { it.quantity }
 
@@ -1045,8 +1052,8 @@ class DeckViewModel @Inject constructor(
         val entries = deckDao.getEntriesForDeck(deckId)
         val identities = cardIdentityDao.getAll().first().associateBy { it.nameSlug }
         val allPrintings = cardPrintingDao.getAll().first().groupBy { it.nameSlug }
-        val storageLocations = locationPolicyDao.getStorageLocations().map { it.normalizedName }.toSet()
-        val deckLocations = locationPolicyDao.getByKind("deck").map { it.normalizedName }.toSet()
+        val storageLocations = locationPolicyDao.getStorageLocations().map { it.name }.toSet()
+        val deckLocations = locationPolicyDao.getByKind("deck").map { it.name }.toSet()
         val linkedLoc = deckDao.getDeck(deckId)?.linkedLocationName
 
         val display = entries.map { entry ->
@@ -1054,7 +1061,7 @@ class DeckViewModel @Inject constructor(
             val printings = allPrintings[entry.nameSlug] ?: emptyList()
             val imageURL = printings.firstOrNull { !it.imageURL.isNullOrEmpty() }?.imageURL
                 ?: printings.firstOrNull()?.imageURL
-            val allLines = inventoryLineDao.getBySlug(entry.nameSlug)
+            val allLines = inventoryLineDao.getLinesByCardSlug(entry.nameSlug)
             val inStorage = allLines.filter { it.locationName in storageLocations }.sumOf { it.quantity }
             val inDeckLocation = allLines.filter { it.locationName == linkedLoc }.sumOf { it.quantity }
             val inDecks = allLines.filter { it.locationName in deckLocations && it.locationName != linkedLoc }.sumOf { it.quantity }

@@ -75,6 +75,14 @@ object AppModule {
         }
     }
 
+    // Migration from v3 → v4: rename normalizedName PK to name (use exact API name as identity)
+    val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE inventory_locations RENAME COLUMN normalizedName TO name")
+            db.execSQL("ALTER TABLE location_policies RENAME COLUMN normalizedName TO name")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): RiftDatabase {
@@ -83,7 +91,7 @@ object AppModule {
             RiftDatabase::class.java,
             "rift_companion.db",
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .fallbackToDestructiveMigration()
             .build()
     }

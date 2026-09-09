@@ -113,14 +113,16 @@ fun DeckFromLocationScreen(
             // Step 1: Pick location
             1 -> {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // Only show Deck-type locations (creating a definition from a physical deck)
+                    val deckLocations = locationsState.locations.filter { it.kind == com.riftcompanion.app.domain.model.LocationKind.Deck }
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.weight(1f),
                     ) {
-                        items(locationsState.locations, key = { it.normalizedName }) { location ->
-                            val isSelected = selectedLocation == location.normalizedName
+                        items(deckLocations, key = { it.name }) { location ->
+                            val isSelected = selectedLocation == location.name
                             ThemedCardSurface(
-                                modifier = Modifier.fillMaxWidth().clickable { selectedLocation = location.normalizedName },
+                                modifier = Modifier.fillMaxWidth().clickable { selectedLocation = location.name },
                                 cornerRadius = 12,
                             ) {
                                 Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {

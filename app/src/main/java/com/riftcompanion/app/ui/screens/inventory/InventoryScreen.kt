@@ -153,7 +153,7 @@ fun InventoryScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     uiState.selectedLocation?.let { locName ->
-                        val loc = uiState.locations.firstOrNull { it.normalizedName == locName }
+                        val loc = uiState.locations.firstOrNull { it.name == locName }
                         FilterChip(
                             selected = true,
                             onClick = { viewModel.setSelectedLocation(null) },
@@ -329,10 +329,10 @@ private fun FilterSheetContent(
                 label = { Text("All Locations ($totalCardCount)") },
             )
             locations.forEach { location ->
-                val count = cardCountsByLocation[location.normalizedName] ?: 0
+                val count = cardCountsByLocation[location.name] ?: 0
                 FilterChip(
-                    selected = selectedLocation == location.normalizedName,
-                    onClick = { onLocationSelected(location.normalizedName) },
+                    selected = selectedLocation == location.name,
+                    onClick = { onLocationSelected(location.name) },
                     label = { Text("${location.displayName} ($count)") },
                 )
             }

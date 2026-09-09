@@ -70,12 +70,12 @@ class CardDetailViewModel @Inject constructor(
 
             val totalOwned = cardLines.sumOf { it.quantity }
             val locationQuantities = cardLines.filter { it.quantity > 0 }
-                .groupBy { com.riftcompanion.app.domain.model.InventoryLocation.normalize(it.locationName) }
-                .map { (normName, locLines) ->
-                    val policy = policies.firstOrNull { it.normalizedName == normName }
-                    val locEntity = locations.firstOrNull { it.normalizedName == normName }
+                .groupBy { it.locationName ?: "Unlocated" }
+                .map { (locName, locLines) ->
+                    val policy = policies.firstOrNull { it.name == locName }
+                    val locEntity = locations.firstOrNull { it.name == locName }
                     LocationQuantity(
-                        normalizedLocationName = normName,
+                        locationName = locName,
                         displayName = locEntity?.displayName ?: policy?.displayName ?: "Unlocated",
                         color = policy?.color ?: locEntity?.color,
                         icon = policy?.icon ?: locEntity?.icon,

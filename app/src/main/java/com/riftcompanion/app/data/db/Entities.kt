@@ -59,7 +59,7 @@ data class InventoryLineEntity(
 
 @Entity(tableName = "inventory_locations")
 data class InventoryLocationEntity(
-    @PrimaryKey val normalizedName: String,
+    @PrimaryKey val name: String,
     val displayName: String,
     val color: String?,
     val icon: String?,
@@ -69,7 +69,7 @@ data class InventoryLocationEntity(
 
 @Entity(tableName = "location_policies")
 data class LocationPolicyEntity(
-    @PrimaryKey val normalizedName: String,
+    @PrimaryKey val name: String,
     val displayName: String,
     val color: String?,
     val icon: String?,

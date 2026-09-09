@@ -29,15 +29,7 @@ data class InventoryLocation(
     val color: String? = null,
     val icon: String? = null,
 ) {
-    val normalizedName: String
-        get() = Companion.normalize(name)
-
-    companion object {
-        fun normalize(value: String?): String {
-            val normalized = value?.trim()?.lowercase() ?: ""
-            return normalized.ifEmpty { "__unlocated__" }
-        }
-    }
+    val id: String get() = name
 }
 
 @Serializable
@@ -64,7 +56,7 @@ data class CardAvailability(
 
 @Serializable
 data class LocationQuantity(
-    val normalizedLocationName: String,
+    val locationName: String,
     val displayName: String,
     val color: String? = null,
     val icon: String? = null,
@@ -142,7 +134,7 @@ enum class LocationKind(val storageValue: String, val title: String, val icon: S
 }
 
 data class LocationPolicy(
-    val normalizedName: String,
+    val name: String,
     val displayName: String,
     val color: String? = null,
     val icon: String? = null,
@@ -150,7 +142,7 @@ data class LocationPolicy(
     val countsAsAvailable: Boolean = true,
     val hidden: Boolean = false,
 ) {
-    val id: String get() = normalizedName
+    val id: String get() = name
 }
 
 // ── Inventory location mutation requests ────────────────────────────────
