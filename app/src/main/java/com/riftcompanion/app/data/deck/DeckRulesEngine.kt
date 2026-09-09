@@ -78,13 +78,15 @@ object DeckRulesEngine {
         }
 
         // Copy limit (main + chosenChampion + sideboard)
+        // Exception: "Spiderlings" (nameSlug: "spiderlings") has no copy limit
         val copyLimitZones = setOf(DeckZone.main, DeckZone.chosenChampion, DeckZone.sideboard)
+        val unlimitedCards = setOf("spiderlings")
         val quantitiesByName = entries
             .filter { it.zone in copyLimitZones }
             .groupBy { it.nameSlug }
             .mapValues { (_, group) -> group.sumOf { maxOf(0, it.quantity) } }
         for ((slug, quantity) in quantitiesByName) {
-            if (quantity > ruleset.maximumCopiesByName) {
+            if (slug !in unlimitedCards && quantity > ruleset.maximumCopiesByName) {
                 val name = identities[slug]?.displayName ?: slug
                 issues.add(DeckValidationIssue(
                     ValidationSeverity.error, "copy_limit",

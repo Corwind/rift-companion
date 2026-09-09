@@ -76,6 +76,7 @@ data class LocationPolicyEntity(
     val kind: String,          // storage | deck | unavailable
     val countsAsAvailable: Boolean,
     val hidden: Boolean,
+    val linkedDeckId: String? = null,  // if kind == "deck", which deck this location belongs to
 )
 
 // ── Sync metadata ──────────────────────────────────────────────────────

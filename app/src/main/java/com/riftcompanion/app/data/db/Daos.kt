@@ -38,6 +38,9 @@ interface CardPrintingDao {
     @Query("SELECT * FROM card_printings WHERE nameSlug = :nameSlug")
     suspend fun getByNameSlug(nameSlug: String): List<CardPrintingEntity>
 
+    @Query("SELECT * FROM card_printings WHERE productID = :productId LIMIT 1")
+    suspend fun getByProductId(productId: Long): CardPrintingEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(entities: List<CardPrintingEntity>)
 
@@ -57,7 +60,7 @@ interface InventoryLineDao {
     @Query("SELECT * FROM inventory_lines")
     fun getAll(): Flow<List<InventoryLineEntity>>
 
-    @Query("SELECT * FROM inventory_lines WHERE locationName = :locationName")
+    @Query("SELECT * FROM inventory_lines WHERE locationName = :locationName COLLATE NOCASE")
     suspend fun getByLocation(locationName: String): List<InventoryLineEntity>
 
     @Query("SELECT * FROM inventory_lines WHERE id = :nameSlug AND locationName = :locationName LIMIT 1")
@@ -124,6 +127,9 @@ interface LocationPolicyDao {
 
     @Query("SELECT * FROM location_policies WHERE kind = 'storage'")
     suspend fun getStorageLocations(): List<LocationPolicyEntity>
+
+    @Query("SELECT * FROM location_policies WHERE normalizedName = :name LIMIT 1")
+    suspend fun getByName(name: String): LocationPolicyEntity?
 }
 
 @Dao

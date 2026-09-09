@@ -3,6 +3,7 @@ package com.riftcompanion.app.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.riftcompanion.app.data.db.CardIdentityDao
+import com.riftcompanion.app.data.db.CardPrintingDao
 import com.riftcompanion.app.data.db.DeckDao
 import com.riftcompanion.app.data.db.DeckEntity
 import com.riftcompanion.app.data.db.DeckEntryEntity
@@ -51,10 +52,22 @@ data class DeckDetailUiState(
 )
 
 data class DeckEntryDisplay(
+    val entryId: Long = 0,
     val zone: DeckZone,
     val nameSlug: String,
     val displayName: String,
     val quantity: Int,
+    val preferredImageURL: String? = null,
+    val cardType: String? = null,
+    val expansion: String? = null,
+    val rarity: String? = null,
+    val domains: List<String> = emptyList(),
+    // Availability info for deck building
+    val availableInStorage: Int = 0,
+    val inOtherDecks: Int = 0,
+    val totalOwned: Int = 0,
+    val isMissing: Boolean = false,
+    val missingCount: Int = 0,
 )
 
 data class ImportUiState(
@@ -104,6 +117,7 @@ data class DeckBuildUiState(
 class DeckViewModel @Inject constructor(
     private val deckDao: DeckDao,
     private val cardIdentityDao: CardIdentityDao,
+    private val cardPrintingDao: CardPrintingDao,
     private val inventoryLineDao: InventoryLineDao,
     private val inventoryLocationDao: InventoryLocationDao,
     private val locationPolicyDao: LocationPolicyDao,
@@ -121,8 +135,11 @@ class DeckViewModel @Inject constructor(
     private val _buildState = MutableStateFlow(DeckBuildUiState())
     val buildState: StateFlow<DeckBuildUiState> = _buildState.asStateFlow()
 
+    private var loadDecksJob: kotlinx.coroutines.Job? = null
+
     fun loadDecks() {
-        viewModelScope.launch {
+        loadDecksJob?.cancel()
+        loadDecksJob = viewModelScope.launch {
             deckDao.getAllDecks().collect { decks ->
                 val identities = cardIdentityDao.getAll().first().associateBy { it.nameSlug }
                 val summaries = decks.map { deck ->
@@ -170,19 +187,48 @@ class DeckViewModel @Inject constructor(
             val deck = deckDao.getDeck(deckId)
             val entries = deckDao.getEntriesForDeck(deckId)
             val identities = cardIdentityDao.getAll().first().associateBy { it.nameSlug }
+            val allPrintings = cardPrintingDao.getAll().first().groupBy { it.nameSlug }
+
+            // Get storage locations and deck locations
+            val storageLocations = locationPolicyDao.getStorageLocations().map { it.normalizedName }.toSet()
+            val deckLocations = locationPolicyDao.getByKind("deck").map { it.normalizedName }.toSet()
+
+            // For each entry, compute availability
             val display = entries.map { entry ->
+                val identity = identities[entry.nameSlug]
+                val printings = allPrintings[entry.nameSlug] ?: emptyList()
+                val imageURL = printings.firstOrNull { !it.imageURL.isNullOrEmpty() }?.imageURL
+                    ?: printings.firstOrNull()?.imageURL
+                // Find all inventory lines for this card
+                val allLines = inventoryLineDao.getBySlug(entry.nameSlug)
+                val inStorage = allLines.filter { it.locationName in storageLocations }.sumOf { it.quantity }
+                val inDecks = allLines.filter { it.locationName in deckLocations && it.locationName != deck?.linkedLocationName }.sumOf { it.quantity }
+                val total = allLines.sumOf { it.quantity }
+                val missing = maxOf(0, entry.quantity - inStorage)
+
                 DeckEntryDisplay(
+                    entryId = entry.id,
                     zone = DeckZone.fromString(entry.zone) ?: DeckZone.main,
                     nameSlug = entry.nameSlug,
-                    displayName = identities[entry.nameSlug]?.displayName ?: entry.nameSlug,
+                    displayName = identity?.displayName ?: entry.nameSlug,
                     quantity = entry.quantity,
+                    preferredImageURL = imageURL,
+                    cardType = identity?.cardType,
+                    expansion = printings.firstOrNull()?.expansionSlug,
+                    rarity = printings.firstOrNull()?.rarity,
+                    domains = identity?.tagsCsv?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
+                    availableInStorage = inStorage,
+                    inOtherDecks = inDecks,
+                    totalOwned = total,
+                    isMissing = missing > 0,
+                    missingCount = missing,
                 )
             }
             _deckDetailState.value = DeckDetailUiState(
                 deck = deck?.let {
                     DeckSummary(it.id, it.name, entries.sumOf { e -> e.quantity }, it.updatedAt)
                 },
-                entries = display.groupBy { it.zone }.flatMap { (zone, items) ->
+                entries = display.groupBy { it.zone }.flatMap { (_, items) ->
                     items.sortedBy { it.displayName }
                 },
                 isLoading = false,
@@ -241,13 +287,21 @@ class DeckViewModel @Inject constructor(
                         updatedAt = now,
                     ))
                     val identities = cardIdentityDao.getAll().first()
-                    val slugByName = identities.associateBy { it.displayName.lowercase() }
+                    // Resolve display names to actual nameSlugs using normalization
+                    // (similar to RiftBuilder's TextDeckNameResolver)
+                    val identitiesByNormalizedName = identities
+                        .groupBy { normalizeName(it.displayName) }
                     val entries = doc.entries.map { entry ->
-                        val slug = slugByName[entry.displayName.lowercase()]?.nameSlug
-                            ?: entry.displayName.lowercase()
+                        val normalized = normalizeName(entry.displayName)
+                        val matches = identitiesByNormalizedName[normalized] ?: emptyList()
+                        val slug = when {
+                            matches.size == 1 -> matches[0].nameSlug
+                            matches.isNotEmpty() -> matches[0].nameSlug // take first if ambiguous
+                            else -> entry.displayName.lowercase()
                                 .replace(" ", "-")
                                 .replace(",", "")
                                 .replace("'", "")
+                        }
                         DeckEntryEntity(
                             deckId = id,
                             zone = entry.zone.name,
@@ -313,6 +367,16 @@ class DeckViewModel @Inject constructor(
         viewModelScope.launch {
             _importState.value = ImportUiState(isImporting = true)
             try {
+                // Check if location is already linked to a deck via location policy
+                val policy = locationPolicyDao.getByName(locationName)
+                if (policy?.linkedDeckId != null) {
+                    val linkedDeck = deckDao.getDeck(policy.linkedDeckId)
+                    _importState.value = ImportUiState(
+                        error = "Location \"${policy.displayName}\" is already linked to deck \"${linkedDeck?.name}\". Each location can only be linked to one deck.",
+                    )
+                    return@launch
+                }
+
                 val lines = inventoryLineDao.getByLocation(locationName)
                 if (lines.isEmpty()) {
                     _importState.value = ImportUiState(error = "No cards found in location: $locationName")
@@ -334,15 +398,20 @@ class DeckViewModel @Inject constructor(
                     linkedLocationName = locationName,
                 ))
 
-                // Group by nameSlug and sum quantities
-                val entries = lines.groupBy { it.id }
-                    .map { (id, group) ->
-                        val line = group.first()
-                        val totalQty = group.sumOf { it.quantity }
+                // Resolve each line's productId to the actual card nameSlug via printings table
+                val printingsByProductId = cardPrintingDao.getAll().first().associateBy { it.productID }
+                val entries = lines
+                    .mapNotNull { line ->
+                        val nameSlug = printingsByProductId[line.productId]?.nameSlug ?: return@mapNotNull null
+                        nameSlug to line
+                    }
+                    .groupBy { it.first } // group by nameSlug
+                    .map { (nameSlug, group) ->
+                        val totalQty = group.sumOf { it.second.quantity }
                         DeckEntryEntity(
                             deckId = deckId,
                             zone = DeckZone.main.name,
-                            nameSlug = line.id,
+                            nameSlug = nameSlug,
                             quantity = totalQty,
                         )
                     }
@@ -382,6 +451,16 @@ class DeckViewModel @Inject constructor(
                 val existingLocation = deck.linkedLocationName
                 val isNewLocation = existingLocation == null
                 val deckLocationName = existingLocation ?: "${deck.name} (Deck)"
+
+                if (isNewLocation) {
+                    val normalizedDeckLoc = deckLocationName.lowercase().trim()
+                    val policy = locationPolicyDao.getByName(normalizedDeckLoc)
+                    if (policy?.linkedDeckId != null && policy.linkedDeckId != deckId) {
+                        throw IllegalArgumentException(
+                            "Location \"$deckLocationName\" is already linked to another deck."
+                        )
+                    }
+                }
 
                 // Get all storage locations
                 val storageLocations = locationPolicyDao.getStorageLocations()
@@ -445,28 +524,30 @@ class DeckViewModel @Inject constructor(
     /**
      * Execute the deck build: create deck location if needed, move cards
      * from storage to deck location, link location to deck.
+     * Records source location for each card for future disassembly.
      */
     fun executeBuild() {
         viewModelScope.launch {
             val preview = _buildState.value.preview ?: return@launch
             _buildState.value = _buildState.value.copy(isLoading = true)
             try {
+                val deckLocationNormalized = preview.deckLocationName.lowercase().trim()
+
                 // Create deck location if new
                 if (preview.isNewLocation) {
-                    val normalized = preview.deckLocationName.lowercase().trim()
                     locationPolicyDao.upsert(LocationPolicyEntity(
-                        normalizedName = normalized,
+                        normalizedName = deckLocationNormalized,
                         displayName = preview.deckLocationName,
                         color = null,
                         icon = null,
                         kind = "deck",
                         countsAsAvailable = false,
                         hidden = false,
+                        linkedDeckId = preview.deckId,
                     ))
-                    // Also insert into inventory_locations
                     inventoryLocationDao.insertAll(listOf(
                         InventoryLocationEntity(
-                            normalizedName = normalized,
+                            normalizedName = deckLocationNormalized,
                             displayName = preview.deckLocationName,
                             color = null,
                             icon = null,
@@ -474,8 +555,8 @@ class DeckViewModel @Inject constructor(
                     ))
                 }
 
-                // Move cards: for each movement, reduce source line quantity
-                // and create/update line in deck location
+                // Move cards and record source tracking
+                val updatedEntries = mutableListOf<DeckEntryEntity>()
                 for (movement in preview.movements) {
                     val sourceLines = inventoryLineDao.getBySlug(movement.nameSlug)
                         .filter { it.locationName == movement.fromLocation }
@@ -495,7 +576,7 @@ class DeckViewModel @Inject constructor(
                         }
 
                         // Create line in deck location
-                        val newLineId = "${movement.nameSlug}_${preview.deckLocationName}_${System.currentTimeMillis()}"
+                        val newLineId = "${movement.nameSlug}_${deckLocationNormalized}_${System.currentTimeMillis()}"
                         inventoryLineDao.insertAll(listOf(
                             InventoryLineEntity(
                                 id = newLineId,
@@ -505,7 +586,7 @@ class DeckViewModel @Inject constructor(
                                 condition = line.condition,
                                 language = line.language,
                                 quantity = take,
-                                locationName = preview.deckLocationName.lowercase().trim(),
+                                locationName = deckLocationNormalized,
                                 tagsCsv = line.tagsCsv,
                                 comment = line.comment,
                                 notes = line.notes,
@@ -518,16 +599,88 @@ class DeckViewModel @Inject constructor(
                     }
                 }
 
-                // Link location to deck
+                // Mark deck entries as built with source tracking
+                val existingEntries = deckDao.getEntriesForDeck(preview.deckId)
+                for (entry in existingEntries) {
+                    val movement = preview.movements.find { it.nameSlug == entry.nameSlug }
+                    updatedEntries.add(entry.copy(
+                        isBuilt = true,
+                        sourceLocationName = movement?.fromLocation,
+                    ))
+                }
+                deckDao.deleteEntriesForDeck(preview.deckId)
+                deckDao.insertEntries(updatedEntries)
+
+                // Link location to deck and mark as assembled
                 val deck = deckDao.getDeck(preview.deckId)
                 if (deck != null) {
                     deckDao.insertDeck(deck.copy(
-                        linkedLocationName = preview.deckLocationName.lowercase().trim(),
+                        linkedLocationName = deckLocationNormalized,
+                        state = "assembled",
                         updatedAt = System.currentTimeMillis(),
                     ))
                 }
 
                 _buildState.value = DeckBuildUiState(isBuilt = true, isLoading = false)
+                loadDecks()
+            } catch (e: Exception) {
+                _buildState.value = DeckBuildUiState(error = e.message, isLoading = false)
+            }
+        }
+    }
+
+    /**
+     * Disassemble a deck: move all cards from the deck location back to
+     * their original source locations. If overrideLocation is provided,
+     * cards go there instead of their original source.
+     */
+    fun disassembleDeck(deckId: String, overrideLocation: String? = null) {
+        viewModelScope.launch {
+            _buildState.value = DeckBuildUiState(isLoading = true)
+            try {
+                val deck = deckDao.getDeck(deckId)
+                    ?: throw IllegalArgumentException("Deck not found")
+                val deckLocation = deck.linkedLocationName
+                    ?: throw IllegalArgumentException("Deck has no linked location")
+                val entries = deckDao.getEntriesForDeck(deckId)
+
+                for (entry in entries) {
+                    if (!entry.isBuilt) continue
+
+                    // Determine where to return the card
+                    val returnLocation = overrideLocation ?: entry.sourceLocationName
+                        ?: "Storage"
+
+                    // Find the card in the deck location
+                    val deckLines = inventoryLineDao.getByLocation(deckLocation)
+                        .filter { it.id == entry.nameSlug }
+
+                    for (line in deckLines) {
+                        // Move back to source/override location
+                        inventoryLineDao.insertAll(listOf(
+                            line.copy(
+                                locationName = returnLocation,
+                                updatedAt = System.currentTimeMillis().toString(),
+                            ),
+                        ))
+                        // Remove from deck location
+                        inventoryLineDao.updateLocationAndQuantity(line.id, deckLocation, 0)
+                    }
+                }
+
+                // Mark entries as not built
+                val updatedEntries = entries.map { it.copy(isBuilt = false) }
+                deckDao.deleteEntriesForDeck(deckId)
+                deckDao.insertEntries(updatedEntries)
+
+                // Update deck state
+                deckDao.insertDeck(deck.copy(
+                    state = "planned",
+                    updatedAt = System.currentTimeMillis(),
+                ))
+
+                _buildState.value = DeckBuildUiState(isLoading = false)
+                loadDecks()
             } catch (e: Exception) {
                 _buildState.value = DeckBuildUiState(error = e.message, isLoading = false)
             }
@@ -536,5 +689,117 @@ class DeckViewModel @Inject constructor(
 
     fun clearBuildState() {
         _buildState.value = DeckBuildUiState()
+    }
+
+    // ── Deck editing ───────────────────────────────────────────────────
+
+    /**
+     * Add a card to a deck in the specified zone. If the card already exists
+     * in that zone, increases the quantity.
+     */
+    fun addCardToDeck(deckId: String, nameSlug: String, zone: DeckZone, quantity: Int = 1) {
+        viewModelScope.launch {
+            val entries = deckDao.getEntriesForDeck(deckId)
+            val existing = entries.find { it.nameSlug == nameSlug && it.zone == zone.name }
+            if (existing != null) {
+                deckDao.deleteEntriesForDeck(deckId)
+                deckDao.insertEntries(entries.map {
+                    if (it.id == existing.id) it.copy(quantity = it.quantity + quantity)
+                    else it
+                })
+            } else {
+                deckDao.insertEntries(listOf(
+                    DeckEntryEntity(
+                        deckId = deckId,
+                        zone = zone.name,
+                        nameSlug = nameSlug,
+                        quantity = quantity,
+                    ),
+                ))
+            }
+            loadDeckDetail(deckId)
+            loadDecks()
+        }
+    }
+
+    /**
+     * Remove a card from a deck (reduce quantity or remove entirely).
+     */
+    fun removeCardFromDeck(deckId: String, nameSlug: String, zone: DeckZone, quantity: Int = 1) {
+        viewModelScope.launch {
+            val entries = deckDao.getEntriesForDeck(deckId)
+            val existing = entries.find { it.nameSlug == nameSlug && it.zone == zone.name }
+            if (existing != null) {
+                val newQty = existing.quantity - quantity
+                deckDao.deleteEntriesForDeck(deckId)
+                if (newQty > 0) {
+                    deckDao.insertEntries(entries.map {
+                        if (it.id == existing.id) it.copy(quantity = newQty)
+                        else it
+                    })
+                } else {
+                    deckDao.insertEntries(entries.filter { it.id != existing.id })
+                }
+            }
+            loadDeckDetail(deckId)
+            loadDecks()
+        }
+    }
+
+    /**
+     * Set the exact quantity of a card in a deck zone.
+     * If quantity is 0, removes the card.
+     */
+    fun setCardQuantity(deckId: String, nameSlug: String, zone: DeckZone, quantity: Int) {
+        viewModelScope.launch {
+            val entries = deckDao.getEntriesForDeck(deckId)
+            val existing = entries.find { it.nameSlug == nameSlug && it.zone == zone.name }
+            deckDao.deleteEntriesForDeck(deckId)
+            if (quantity > 0) {
+                if (existing != null) {
+                    deckDao.insertEntries(entries.map {
+                        if (it.id == existing.id) it.copy(quantity = quantity)
+                        else it
+                    })
+                } else {
+                    deckDao.insertEntries(entries + DeckEntryEntity(
+                        deckId = deckId,
+                        zone = zone.name,
+                        nameSlug = nameSlug,
+                        quantity = quantity,
+                    ))
+                }
+            } else if (existing != null) {
+                deckDao.insertEntries(entries.filter { it.id != existing.id })
+            } else {
+                deckDao.insertEntries(entries)
+            }
+            loadDeckDetail(deckId)
+            loadDecks()
+        }
+    }
+
+    /**
+     * Remove a card entry entirely from a deck.
+     */
+    fun removeCardEntry(deckId: String, entryId: Long) {
+        viewModelScope.launch {
+            val entries = deckDao.getEntriesForDeck(deckId)
+            deckDao.deleteEntriesForDeck(deckId)
+            deckDao.insertEntries(entries.filter { it.id != entryId })
+            loadDeckDetail(deckId)
+            loadDecks()
+        }
+    }
+
+    /**
+     * Normalize a card display name for matching against the catalogue.
+     * Similar to RiftBuilder's TextDeckNameNormalizer:
+     * case-insensitive, diacritic-insensitive, collapses whitespace,
+     * treats hyphens between words as title separators.
+     */
+    private fun normalizeName(name: String): String {
+        return name.lowercase().trim()
+            .replace("\\s+".toRegex(), " ")
     }
 }

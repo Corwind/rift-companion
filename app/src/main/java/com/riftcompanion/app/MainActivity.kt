@@ -57,6 +57,7 @@ import com.riftcompanion.app.ui.components.gradientBackground
 import com.riftcompanion.app.ui.screens.carddetail.CardDetailScreen
 import com.riftcompanion.app.ui.screens.catalogue.CatalogueScreen
 import com.riftcompanion.app.ui.screens.decks.DeckDetailScreen
+import com.riftcompanion.app.ui.screens.decks.DeckFromLocationScreen
 import com.riftcompanion.app.ui.screens.decks.DeckImportScreen
 import com.riftcompanion.app.ui.screens.decks.DeckListScreen
 import com.riftcompanion.app.ui.screens.inventory.InventoryScreen
@@ -281,6 +282,16 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                         DeckImportScreen(
                             onBack = { navController.popBackStack() },
                             onImported = { deckId ->
+                                navController.navigate("deckDetail/$deckId") {
+                                    popUpTo("decks")
+                                }
+                            },
+                        )
+                    }
+                    composable("deckFromLocation") {
+                        DeckFromLocationScreen(
+                            onBack = { navController.popBackStack() },
+                            onCreated = { deckId ->
                                 navController.navigate("deckDetail/$deckId") {
                                     popUpTo("decks")
                                 }

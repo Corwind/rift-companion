@@ -29,7 +29,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,6 +38,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,6 +64,10 @@ fun DeckListScreen(
 ) {
     val deckListState by viewModel.deckListState.collectAsStateWithLifecycle()
 
+    LaunchedEffect(Unit) {
+        viewModel.loadDecks()
+    }
+
     var showCreateDialog by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var deckToDelete by remember { mutableStateOf<DeckSummary?>(null) }
@@ -71,11 +75,6 @@ fun DeckListScreen(
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showMenu = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Add deck")
-            }
-        },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -84,12 +83,45 @@ fun DeckListScreen(
                 .fillMaxSize()
                 .gradientBackground(),
         ) {
-            Text(
-                text = "Decks",
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp),
-            )
+            // Header row with title and add button
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Decks",
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Default.Add, contentDescription = "Add deck", tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Import from text") },
+                            onClick = { showMenu = false; onImportClick() },
+                            leadingIcon = { Icon(Icons.Default.FileUpload, contentDescription = null) },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Create from location") },
+                            onClick = { showMenu = false; onCreateFromLocation() },
+                            leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null) },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Create empty deck") },
+                            onClick = { showMenu = false; showCreateDialog = true },
+                            leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
+                        )
+                    }
+                }
+            }
 
             if (deckListState.decks.isEmpty() && !deckListState.isLoading) {
                 Box(
@@ -124,28 +156,6 @@ fun DeckListScreen(
                 }
             }
         }
-    }
-
-    // FAB dropdown menu
-    DropdownMenu(
-        expanded = showMenu,
-        onDismissRequest = { showMenu = false },
-    ) {
-        DropdownMenuItem(
-            text = { Text("Import from text") },
-            onClick = { showMenu = false; onImportClick() },
-            leadingIcon = { Icon(Icons.Default.FileUpload, contentDescription = null) },
-        )
-        DropdownMenuItem(
-            text = { Text("Create from location") },
-            onClick = { showMenu = false; onCreateFromLocation() },
-            leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null) },
-        )
-        DropdownMenuItem(
-            text = { Text("Create empty deck") },
-            onClick = { showMenu = false; showCreateDialog = true },
-            leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
-        )
     }
 
     // Create empty deck dialog
