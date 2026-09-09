@@ -792,12 +792,15 @@ class DeckViewModel @Inject constructor(
                     }
                 }
 
-                // Get all storage locations
+                // Get all storage locations (normalized for case-insensitive matching)
                 val storageLocations = locationPolicyDao.getStorageLocations()
-                val storageLocationNames = storageLocations.map { it.name }.toSet()
+                val storageLocationNames = storageLocations.map { it.name.trim().lowercase() }.toSet()
+                val deckLocationNorm = deckLocationName.trim().lowercase()
 
-                // For each deck entry, find available cards in storage
-                // Runes and battlefields are always available — they don't need to be in inventory
+                // For each deck entry, find available cards.
+                // Cards already at the deck location count as available (no movement needed).
+                // Only the shortfall is moved from storage.
+                // Runes and battlefields are always available — they don't need to be in inventory.
                 val movements = mutableListOf<CardMovement>()
                 val missing = mutableListOf<MissingCard>()
 
@@ -806,13 +809,20 @@ class DeckViewModel @Inject constructor(
                     val needed = entry.quantity
                     val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
 
-                    // Find all inventory lines for this card in storage locations
-                    val lines = inventoryLineDao.getLinesByCardSlug(entry.nameSlug)
-                        .filter { it.locationName in storageLocationNames }
+                    val allLines = inventoryLineDao.getLinesByCardSlug(entry.nameSlug)
+
+                    // Cards already at the deck location — no movement needed
+                    val alreadyAtDeck = allLines
+                        .filter { it.locationName?.trim()?.lowercase() == deckLocationNorm }
+                        .sumOf { it.quantity }
+
+                    // Cards in storage that can be moved to cover the shortfall
+                    val storageLines = allLines
+                        .filter { it.locationName?.trim()?.lowercase() in storageLocationNames }
                         .sortedBy { it.locationName }
 
-                    var remaining = needed
-                    for (line in lines) {
+                    var remaining = maxOf(0, needed - alreadyAtDeck)
+                    for (line in storageLines) {
                         if (remaining <= 0) break
                         val take = minOf(remaining, line.quantity)
                         movements.add(CardMovement(
@@ -963,11 +973,14 @@ class DeckViewModel @Inject constructor(
                     val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
                     if (zone == DeckZone.rune || zone == DeckZone.battlefield) {
                         val printing = allPrintings[entry.nameSlug] ?: continue
-                        // Only create the shortfall (not already moved from storage)
                         val movedFromStorage = preview.movements
                             .filter { it.nameSlug == entry.nameSlug }
                             .sumOf { it.quantity }
-                        val toCreate = entry.quantity - movedFromStorage
+                        // Cards already at the deck location don't need to be created
+                        val alreadyAtDeck = inventoryLineDao.getLinesByCardSlug(entry.nameSlug)
+                            .filter { it.locationName?.trim()?.lowercase() == deckLocationNormalized }
+                            .sumOf { it.quantity }
+                        val toCreate = entry.quantity - movedFromStorage - alreadyAtDeck
                         if (toCreate <= 0) continue
                         val newLineId = "${entry.nameSlug}_${deckLocationNormalized}_${System.currentTimeMillis()}"
                         inventoryLineDao.insertAll(listOf(
