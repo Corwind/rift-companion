@@ -1,6 +1,7 @@
 package com.riftcompanion.app.ui.screens.catalogue
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,56 +64,48 @@ import com.riftcompanion.app.ui.viewmodel.CatalogueViewModel
 @Composable
 fun CatalogueScreen(
     onCardClick: (String, Boolean) -> Unit,
-    onMenuClick: () -> Unit = {},
     viewModel: CatalogueViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
-        modifier = Modifier.gradientBackground(),
+        
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
-        topBar = {
-            TopAppBar(
-                title = { Text("Catalog") },
-                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
-                    containerColor = androidx.compose.ui.graphics.Color.Transparent,
-                ),
-                navigationIcon = {
-                    IconButton(onClick = onMenuClick) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menu")
-                    }
-                },
-                actions = {
-                    SingleChoiceSegmentedButtonRow {
-                        SegmentedButton(
-                            selected = uiState.viewMode == CardViewMode.LIST,
-                            onClick = { viewModel.setViewMode(CardViewMode.LIST) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                            label = { Icon(Icons.Default.List, contentDescription = "List") },
-                        )
-                        SegmentedButton(
-                            selected = uiState.viewMode == CardViewMode.GRID,
-                            onClick = { viewModel.setViewMode(CardViewMode.GRID) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                            label = { Icon(Icons.Default.GridView, contentDescription = "Grid") },
-                        )
-                    }
-                },
-            )
-        },
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0,0,0,0),
     ) { padding ->
-        Column(modifier = Modifier.padding(padding)) {
-            OutlinedTextField(
-                value = uiState.searchQuery,
-                onValueChange = { viewModel.setSearchQuery(it) },
-                placeholder = { Text("Search…") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                singleLine = true,
-                shape = RoundedCornerShape(24.dp),
+        Column(modifier = Modifier.padding(padding).statusBarsPadding()) {
+            // Compact search bar + view toggle on one line
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
-            )
+                    .padding(horizontal = 12.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                OutlinedTextField(
+                    value = uiState.searchQuery,
+                    onValueChange = { viewModel.setSearchQuery(it) },
+                    placeholder = { Text("Search…", style = MaterialTheme.typography.labelMedium) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp),
+                    textStyle = MaterialTheme.typography.labelMedium,
+                )
+                IconButton(onClick = {
+                    viewModel.setViewMode(
+                        if (uiState.viewMode == CardViewMode.GRID) CardViewMode.LIST else CardViewMode.GRID
+                    )
+                }) {
+                    Icon(
+                        if (uiState.viewMode == CardViewMode.GRID) Icons.Default.List else Icons.Default.GridView,
+                        contentDescription = if (uiState.viewMode == CardViewMode.GRID) "List view" else "Grid view",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
 
             if (uiState.isLoading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

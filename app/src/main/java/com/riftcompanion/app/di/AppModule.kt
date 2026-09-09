@@ -9,6 +9,7 @@ import coil3.request.crossfade
 import com.riftcompanion.app.data.api.CardNexusClient
 import com.riftcompanion.app.data.db.CardIdentityDao
 import com.riftcompanion.app.data.db.CardPrintingDao
+import com.riftcompanion.app.data.db.DeckDao
 import com.riftcompanion.app.data.db.InventoryLineDao
 import com.riftcompanion.app.data.db.InventoryLocationDao
 import com.riftcompanion.app.data.db.LocationPolicyDao
@@ -50,6 +51,7 @@ object AppModule {
     @Provides fun provideInventoryLocationDao(db: RiftDatabase): InventoryLocationDao = db.inventoryLocationDao()
     @Provides fun provideLocationPolicyDao(db: RiftDatabase): LocationPolicyDao = db.locationPolicyDao()
     @Provides fun provideSyncMetadataDao(db: RiftDatabase): SyncMetadataDao = db.syncMetadataDao()
+    @Provides fun provideDeckDao(db: RiftDatabase): DeckDao = db.deckDao()
 
     @Provides
     @Singleton

@@ -11,8 +11,10 @@ import androidx.room.RoomDatabase
         InventoryLocationEntity::class,
         LocationPolicyEntity::class,
         SyncMetadataEntity::class,
+        DeckEntity::class,
+        DeckEntryEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class RiftDatabase : RoomDatabase() {
@@ -22,4 +24,5 @@ abstract class RiftDatabase : RoomDatabase() {
     abstract fun inventoryLocationDao(): InventoryLocationDao
     abstract fun locationPolicyDao(): LocationPolicyDao
     abstract fun syncMetadataDao(): SyncMetadataDao
+    abstract fun deckDao(): DeckDao
 }

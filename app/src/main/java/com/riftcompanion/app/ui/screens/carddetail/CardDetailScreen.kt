@@ -44,6 +44,7 @@ import com.riftcompanion.app.domain.model.firstDisplayValue
 import com.riftcompanion.app.domain.model.firstText
 import com.riftcompanion.app.ui.components.CardArtwork
 import com.riftcompanion.app.ui.components.DomainTag
+import com.riftcompanion.app.ui.components.HighlightedRulesText
 import com.riftcompanion.app.ui.components.QuantityBadge
 import com.riftcompanion.app.ui.components.ThemedCardSurface
 import com.riftcompanion.app.ui.components.gradientBackground
@@ -166,7 +167,7 @@ fun CardDetailScreen(
                 // Rules text
                 identity.attributes.firstText(listOf("rulesText", "rules_text", "rules", "effectText", "effect_text", "effect", "abilityText", "ability_text", "text"))?.let { rules ->
                     DetailSection("Rules", Icons.Default.Description) {
-                        Text(rules, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                        HighlightedRulesText(text = rules)
                     }
                     Spacer(Modifier.height(20.dp))
                 }

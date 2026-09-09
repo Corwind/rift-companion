@@ -1,6 +1,7 @@
 package com.riftcompanion.app.ui.screens.locations
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -70,7 +71,6 @@ import com.riftcompanion.app.ui.viewmodel.LocationsViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocationsScreen(
-    onMenuClick: () -> Unit = {},
     onLocationClick: (String) -> Unit = {},
     viewModel: LocationsViewModel = hiltViewModel(),
 ) {
@@ -88,21 +88,9 @@ fun LocationsScreen(
     }
 
     Scaffold(
-        modifier = Modifier.gradientBackground(),
+        
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
-        topBar = {
-            TopAppBar(
-                title = { Text("Locations") },
-                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
-                    containerColor = androidx.compose.ui.graphics.Color.Transparent,
-                ),
-                navigationIcon = {
-                    IconButton(onClick = onMenuClick) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menu")
-                    }
-                },
-            )
-        },
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0,0,0,0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(onClick = { showCreateDialog = true }) {
@@ -111,7 +99,7 @@ fun LocationsScreen(
         },
     ) { padding ->
         if (uiState.isLoading) {
-            Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(Modifier.padding(padding).statusBarsPadding().fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
         } else if (uiState.locations.isEmpty()) {

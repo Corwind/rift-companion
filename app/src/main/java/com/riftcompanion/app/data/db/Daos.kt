@@ -57,6 +57,9 @@ interface InventoryLineDao {
     @Query("SELECT * FROM inventory_lines")
     fun getAll(): Flow<List<InventoryLineEntity>>
 
+    @Query("SELECT * FROM inventory_lines WHERE locationName = :locationName")
+    suspend fun getByLocation(locationName: String): List<InventoryLineEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(entities: List<InventoryLineEntity>)
 

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -43,6 +44,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
@@ -81,24 +83,15 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val themeState = currentThemeState()
-    val snackbarHostState = remember { SnackbarHostState() }
 
     var showApiKeyField by remember { mutableStateOf(false) }
     var apiKey by remember { mutableStateOf("") }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    LaunchedEffect(uiState.syncMessage) {
-        uiState.syncMessage?.let { snackbarHostState.showSnackbar(it); viewModel.clearSyncMessage() }
-    }
-    LaunchedEffect(uiState.syncError) {
-        uiState.syncError?.let { snackbarHostState.showSnackbar("Error: $it"); viewModel.clearSyncMessage() }
-    }
-
     Scaffold(
-        
+
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0,0,0,0),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         Column(
             modifier = Modifier.padding(padding).statusBarsPadding().fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 100.dp),
