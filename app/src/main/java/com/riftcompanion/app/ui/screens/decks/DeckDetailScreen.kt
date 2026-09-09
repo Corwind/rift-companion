@@ -652,6 +652,7 @@ private fun AddCardSheet(
 ) {
     val catalogueViewModel: CatalogueViewModel = hiltViewModel()
     val catalogueState by catalogueViewModel.uiState.collectAsStateWithLifecycle()
+    val detailState by deckViewModel.deckDetailState.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var searchQuery by remember { mutableStateOf("") }
     var legendDomains by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -667,6 +668,16 @@ private fun AddCardSheet(
         mutableStateOf(zonePriority.firstOrNull { it !in zonesWithCards } ?: DeckZone.main)
     }
     var zoneDropdownExpanded by remember { mutableStateOf(false) }
+
+    // Map each card's nameSlug to (total in deck, quantity in selected zone)
+    val deckQuantities = remember(detailState.entries, selectedZone) {
+        val totalBySlug = detailState.entries.groupBy { it.nameSlug }
+            .mapValues { (_, items) -> items.sumOf { it.quantity } }
+        val zoneBySlug = detailState.entries
+            .filter { it.zone == selectedZone }
+            .associate { it.nameSlug to it.quantity }
+        totalBySlug to zoneBySlug
+    }
 
     LaunchedEffect(deckId) {
         deckViewModel.getLegendDomains(deckId) { legendDomains = it }
@@ -785,6 +796,8 @@ private fun AddCardSheet(
                 modifier = Modifier.weight(1f),
             ) {
                 listItems(filteredCards, key = { it.id }) { card ->
+                    val totalInDeck = deckQuantities.first[card.id] ?: 0
+                    val inZone = deckQuantities.second[card.id] ?: 0
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -802,13 +815,25 @@ private fun AddCardSheet(
                             cornerRadius = 4,
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text(
-                            card.identity.displayName,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                card.identity.displayName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (totalInDeck > 0 || inZone > 0) {
+                                Text(
+                                    buildString {
+                                        if (inZone > 0) append("$inZone in zone")
+                                        if (inZone > 0 && totalInDeck > 0) append(" · ")
+                                        if (totalInDeck > 0) append("$totalInDeck in deck")
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                         Icon(Icons.Default.Add, contentDescription = "Add", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                     }
                 }
