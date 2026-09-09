@@ -16,14 +16,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items as listItems
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -36,6 +35,8 @@ import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -89,6 +90,9 @@ fun DeckDetailScreen(
     var gridMode by remember { mutableStateOf(false) }
     var showAddCardSheet by remember { mutableStateOf(false) }
     var editingEntry by remember { mutableStateOf<DeckEntryDisplay?>(null) }
+
+    // Track which zones have entries (for auto-selecting missing zones in AddCardSheet)
+    val zonesWithCards = detailState.entries.map { it.zone }.toSet()
 
     Column(
         modifier = Modifier
@@ -175,16 +179,57 @@ fun DeckDetailScreen(
             val grouped = detailState.entries.groupBy { it.zone }
 
             if (gridMode) {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 160.dp),
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 100.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    DeckZone.entries.forEach { zone ->
+                    // Legend + Champion shown side by side
+                    val legend = grouped[DeckZone.legend]?.firstOrNull()
+                    val champion = grouped[DeckZone.chosenChampion]?.firstOrNull()
+                    if (legend != null || champion != null) {
+                        item {
+                            Text(
+                                "Legend & Champion",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                            )
+                        }
+                        item {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                if (legend != null) {
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        DeckCardGrid(legend,
+                                            onAdd = { viewModel.addCardToDeck(deckId, legend.nameSlug, legend.zone) },
+                                            onRemove = { viewModel.removeCardFromDeck(deckId, legend.nameSlug, legend.zone) },
+                                        )
+                                    }
+                                } else {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                                if (champion != null) {
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        DeckCardGrid(champion,
+                                            onAdd = { viewModel.addCardToDeck(deckId, champion.nameSlug, champion.zone) },
+                                            onRemove = { viewModel.removeCardFromDeck(deckId, champion.nameSlug, champion.zone) },
+                                        )
+                                    }
+                                } else {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    }
+
+                    // Remaining zones (skip legend and champion, already shown above)
+                    DeckZone.entries.filter { it != DeckZone.legend && it != DeckZone.chosenChampion }.forEach { zone ->
                         val items = grouped[zone]
                         if (!items.isNullOrEmpty()) {
-                            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(currentLineSpan = 2) }) {
+                            item {
                                 Text(
                                     text = zone.displayName,
                                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
@@ -192,17 +237,32 @@ fun DeckDetailScreen(
                                     modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
                                 )
                             }
-                            items(items.sortedBy { it.displayName }) { entry ->
-                                DeckCardGrid(entry,
-                                    onAdd = { viewModel.addCardToDeck(deckId, entry.nameSlug, entry.zone) },
-                                    onRemove = { viewModel.removeCardFromDeck(deckId, entry.nameSlug, entry.zone) },
-                                )
+                            items.sortedBy { it.displayName }.chunked(2).forEach { rowItems ->
+                                item {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) {
+                                        rowItems.forEach { entry ->
+                                            Box(modifier = Modifier.weight(1f)) {
+                                                DeckCardGrid(entry,
+                                                    onAdd = { viewModel.addCardToDeck(deckId, entry.nameSlug, entry.zone) },
+                                                    onRemove = { viewModel.removeCardFromDeck(deckId, entry.nameSlug, entry.zone) },
+                                                )
+                                            }
+                                        }
+                                        if (rowItems.size == 1) {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
             } else {
                 LazyColumn(
+                    modifier = Modifier.weight(1f),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 100.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -217,7 +277,7 @@ fun DeckDetailScreen(
                                     modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
                                 )
                             }
-                            items(items.sortedBy { it.displayName }) { entry ->
+                            listItems(items.sortedBy { it.displayName }) { entry ->
                                 DeckCardRow(
                                     entry,
                                     onAdd = { viewModel.addCardToDeck(deckId, entry.nameSlug, entry.zone) },
@@ -275,6 +335,7 @@ fun DeckDetailScreen(
     if (showAddCardSheet) {
         AddCardSheet(
             deckId = deckId,
+            zonesWithCards = zonesWithCards,
             onDismiss = { showAddCardSheet = false },
             onAddCard = { nameSlug, zone ->
                 viewModel.addCardToDeck(deckId, nameSlug, zone)
@@ -462,21 +523,53 @@ private fun BuildPreviewDialog(
 
 /**
  * Bottom sheet to search the catalog and add cards to the deck.
+ * Zone selector is a dropdown that auto-selects the first missing zone
+ * in priority order: legend -> champion -> main -> runes -> battlefields -> sideboard.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddCardSheet(
     deckId: String,
+    zonesWithCards: Set<DeckZone>,
     onDismiss: () -> Unit,
     onAddCard: (nameSlug: String, zone: DeckZone) -> Unit,
+    deckViewModel: DeckViewModel = hiltViewModel(),
 ) {
     val catalogueViewModel: CatalogueViewModel = hiltViewModel()
     val catalogueState by catalogueViewModel.uiState.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var searchQuery by remember { mutableStateOf("") }
-    var selectedZone by remember { mutableStateOf(DeckZone.main) }
+    var legendDomains by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    // Auto-select first missing zone in priority order
+    val zonePriority = listOf(
+        DeckZone.legend,
+        DeckZone.chosenChampion,
+        DeckZone.main,
+        DeckZone.rune,
+        DeckZone.battlefield,
+        DeckZone.sideboard,
+    )
+    var selectedZone by remember {
+        mutableStateOf(zonePriority.firstOrNull { it !in zonesWithCards } ?: DeckZone.main)
+    }
+    var zoneDropdownExpanded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(deckId) {
+        deckViewModel.getLegendDomains(deckId) { legendDomains = it }
+    }
 
     LaunchedEffect(searchQuery) { catalogueViewModel.setSearchQuery(searchQuery) }
+
+    // Filter cards by domain (except battlefields)
+    val filteredCards = if (selectedZone == DeckZone.battlefield || legendDomains.isEmpty()) {
+        catalogueState.cards
+    } else {
+        catalogueState.cards.filter { card ->
+            val cardDomains = card.identity.appVisibleDomains
+            cardDomains.isEmpty() || cardDomains.any { it in legendDomains }
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -488,19 +581,51 @@ private fun AddCardSheet(
                 .padding(16.dp),
         ) {
             Text("Add Card to Deck", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
 
-            // Zone selector
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DeckZone.entries.forEach { zone ->
-                    androidx.compose.material3.FilterChip(
-                        selected = selectedZone == zone,
-                        onClick = { selectedZone = zone },
-                        label = { Text(zone.displayName) },
-                    )
+            // Zone dropdown selector
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Zone: ", style = MaterialTheme.typography.bodyMedium)
+                Box {
+                    OutlinedButton(onClick = { zoneDropdownExpanded = true }) {
+                        Text(selectedZone.displayName)
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(18.dp))
+                    }
+                    DropdownMenu(
+                        expanded = zoneDropdownExpanded,
+                        onDismissRequest = { zoneDropdownExpanded = false },
+                    ) {
+                        zonePriority.forEach { zone ->
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(zone.displayName)
+                                        if (zone in zonesWithCards) {
+                                            Spacer(Modifier.width(4.dp))
+                                            Text("✓", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                        }
+                                    }
+                                },
+                                onClick = {
+                                    selectedZone = zone
+                                    zoneDropdownExpanded = false
+                                },
+                            )
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(8.dp))
+
+            // Domain hint
+            if (legendDomains.isNotEmpty() && selectedZone != DeckZone.battlefield) {
+                Text(
+                    "Only cards from: ${legendDomains.joinToString(", ")}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+            }
 
             OutlinedTextField(
                 value = searchQuery,
@@ -516,7 +641,7 @@ private fun AddCardSheet(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.weight(1f),
             ) {
-                items(catalogueState.cards, key = { it.id }) { card ->
+                listItems(filteredCards, key = { it.id }) { card ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()

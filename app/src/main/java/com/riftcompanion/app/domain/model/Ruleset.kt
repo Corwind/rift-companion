@@ -7,7 +7,7 @@ package com.riftcompanion.app.domain.model
 data class ConstructedRuleset(
     val id: String = "constructed-2026-07-16",
     val name: String = "Constructed",
-    val mainDeckCount: Int = 40,
+    val mainDeckCount: Int = 40, // 39 main deck + 1 chosen champion = 40 total (validated together)
     val runeCount: Int = 12,
     val battlefieldCount: Int = 3,
     val maximumCopiesByName: Int = 3,

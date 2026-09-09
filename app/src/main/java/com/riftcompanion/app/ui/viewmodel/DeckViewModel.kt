@@ -43,6 +43,8 @@ data class DeckSummary(
     val isLegal: Boolean = false,
     val legalityIssues: List<String> = emptyList(),
     val linkedLocationName: String? = null,
+    val legendImageURL: String? = null,
+    val legendDisplayName: String? = null,
 )
 
 data class DeckDetailUiState(
@@ -74,6 +76,15 @@ data class ImportUiState(
     val isImporting: Boolean = false,
     val error: String? = null,
     val success: DeckSummary? = null,
+)
+
+/**
+ * A champion card candidate for the chosen champion picker.
+ */
+data class ChampionCandidate(
+    val nameSlug: String,
+    val displayName: String,
+    val imageURL: String? = null,
 )
 
 /**
@@ -142,6 +153,7 @@ class DeckViewModel @Inject constructor(
         loadDecksJob = viewModelScope.launch {
             deckDao.getAllDecks().collect { decks ->
                 val identities = cardIdentityDao.getAll().first().associateBy { it.nameSlug }
+                val allPrintings = cardPrintingDao.getAll().first().groupBy { it.nameSlug }
                 val summaries = decks.map { deck ->
                     val entries = deckDao.getEntriesForDeck(deck.id)
                     val cardCount = entries.sumOf { it.quantity }
@@ -159,11 +171,19 @@ class DeckViewModel @Inject constructor(
                         CardIdentityInfo(
                             nameSlug = entity.nameSlug,
                             displayName = entity.displayName,
+                            domains = entity.domainsCsv.split(",").filter { it.isNotBlank() },
                             tags = entity.tagsCsv.split(",").filter { it.isNotBlank() },
                         )
                     }
                     val issues = DeckRulesEngine.validate(entryData, identityInfos)
                     val isLegal = issues.none { it.severity == ValidationSeverity.error }
+
+                    // Get legend artwork
+                    val legendEntry = entries.firstOrNull { it.zone == DeckZone.legend.name }
+                    val legendIdentity = legendEntry?.let { identities[it.nameSlug] }
+                    val legendImageURL = legendEntry?.let { legendEntry2 ->
+                        allPrintings[legendEntry2.nameSlug]?.firstOrNull { !it.imageURL.isNullOrEmpty() }?.imageURL
+                    }
 
                     DeckSummary(
                         id = deck.id,
@@ -174,6 +194,8 @@ class DeckViewModel @Inject constructor(
                         isLegal = isLegal,
                         legalityIssues = issues.filter { it.severity == ValidationSeverity.error }.map { it.message },
                         linkedLocationName = deck.linkedLocationName,
+                        legendImageURL = legendImageURL,
+                        legendDisplayName = legendIdentity?.displayName,
                     )
                 }
                 _deckListState.value = DeckListUiState(decks = summaries, isLoading = false)
@@ -217,16 +239,54 @@ class DeckViewModel @Inject constructor(
                     expansion = printings.firstOrNull()?.expansionSlug,
                     rarity = printings.firstOrNull()?.rarity,
                     domains = identity?.tagsCsv?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
-                    availableInStorage = inStorage,
-                    inOtherDecks = inDecks,
-                    totalOwned = total,
-                    isMissing = missing > 0,
-                    missingCount = missing,
+                    availableInStorage = if (DeckZone.fromString(entry.zone) == DeckZone.rune || DeckZone.fromString(entry.zone) == DeckZone.battlefield) entry.quantity else inStorage,
+                    inOtherDecks = if (DeckZone.fromString(entry.zone) == DeckZone.rune || DeckZone.fromString(entry.zone) == DeckZone.battlefield) 0 else inDecks,
+                    totalOwned = if (DeckZone.fromString(entry.zone) == DeckZone.rune || DeckZone.fromString(entry.zone) == DeckZone.battlefield) entry.quantity else total,
+                    isMissing = if (DeckZone.fromString(entry.zone) == DeckZone.rune || DeckZone.fromString(entry.zone) == DeckZone.battlefield) false else missing > 0,
+                    missingCount = if (DeckZone.fromString(entry.zone) == DeckZone.rune || DeckZone.fromString(entry.zone) == DeckZone.battlefield) 0 else missing,
                 )
             }
+            // Compute legality
+            val entryData = entries.map {
+                DeckEntryData(
+                    zone = DeckZone.fromString(it.zone) ?: DeckZone.main,
+                    nameSlug = it.nameSlug,
+                    quantity = it.quantity,
+                )
+            }
+            val identityInfos = identities.mapValues { (_, entity) ->
+                CardIdentityInfo(
+                    nameSlug = entity.nameSlug,
+                    displayName = entity.displayName,
+                    domains = entity.domainsCsv.split(",").filter { it.isNotBlank() },
+                    tags = entity.tagsCsv.split(",").filter { it.isNotBlank() },
+                    cardType = entity.cardType,
+                    superType = entity.superType,
+                )
+            }
+            val issues = DeckRulesEngine.validate(entryData, identityInfos)
+            val isLegal = issues.none { it.severity == ValidationSeverity.error }
+            val isBuilt = entries.any { it.isBuilt }
+            val legendEntry = entries.firstOrNull { it.zone == DeckZone.legend.name }
+            val legendIdentity = legendEntry?.let { identities[it.nameSlug] }
+            val legendImageURL = legendEntry?.let { e ->
+                allPrintings[e.nameSlug]?.firstOrNull { !it.imageURL.isNullOrEmpty() }?.imageURL
+            }
+
             _deckDetailState.value = DeckDetailUiState(
                 deck = deck?.let {
-                    DeckSummary(it.id, it.name, entries.sumOf { e -> e.quantity }, it.updatedAt)
+                    DeckSummary(
+                        id = it.id,
+                        name = it.name,
+                        cardCount = entries.sumOf { e -> e.quantity },
+                        updatedAt = it.updatedAt,
+                        isBuilt = isBuilt,
+                        isLegal = isLegal,
+                        legalityIssues = issues.filter { it.severity == ValidationSeverity.error }.map { it.message },
+                        linkedLocationName = it.linkedLocationName,
+                        legendImageURL = legendImageURL,
+                        legendDisplayName = legendIdentity?.displayName,
+                    )
                 },
                 entries = display.groupBy { it.zone }.flatMap { (_, items) ->
                     items.sortedBy { it.displayName }
@@ -332,9 +392,9 @@ class DeckViewModel @Inject constructor(
     }
 
     /**
-     * Create a new empty deck definition.
+     * Create a new empty deck definition with a legend card.
      */
-    fun createEmptyDeck(deckName: String) {
+    fun createEmptyDeck(deckName: String, legendNameSlug: String) {
         viewModelScope.launch {
             _importState.value = ImportUiState(isImporting = true)
             try {
@@ -348,13 +408,241 @@ class DeckViewModel @Inject constructor(
                     createdAt = now,
                     updatedAt = now,
                 ))
+                // Add the legend card
+                deckDao.insertEntries(listOf(
+                    DeckEntryEntity(
+                        deckId = deckId,
+                        zone = DeckZone.legend.name,
+                        nameSlug = legendNameSlug,
+                        quantity = 1,
+                    ),
+                ))
                 _importState.value = ImportUiState(
-                    success = DeckSummary(deckId, deckName.ifBlank { "New Deck" }, 0, now),
+                    success = DeckSummary(deckId, deckName.ifBlank { "New Deck" }, 1, now),
                 )
                 loadDecks()
             } catch (e: Exception) {
                 _importState.value = ImportUiState(error = e.message)
             }
+        }
+    }
+
+    /**
+     * Analyze cards in a location to find legend and champion candidates.
+     * Returns: legend nameSlug (if found in location), champion candidates (cards sharing a tag with legend)
+     */
+    fun analyzeLocationCards(
+        locationName: String,
+        onResult: (legendSlug: String?, legendDisplayName: String?, legendImageURL: String?, championCandidates: List<ChampionCandidate>) -> Unit,
+    ) {
+        viewModelScope.launch {
+            val lines = inventoryLineDao.getByLocation(locationName)
+            val printingsByProductId = cardPrintingDao.getAll().first().associateBy { it.productID }
+            val identities = cardIdentityDao.getAll().first().associateBy { it.nameSlug }
+            val allPrintings = cardPrintingDao.getAll().first().groupBy { it.nameSlug }
+
+            // Resolve all cards in the location to identities
+            val locationIdentities = lines.mapNotNull { line ->
+                val nameSlug = printingsByProductId[line.productId]?.nameSlug ?: return@mapNotNull null
+                identities[nameSlug]
+            }.distinctBy { it.nameSlug }
+
+            // Find legend in the location
+            val legend = locationIdentities.firstOrNull { it.cardType?.lowercase()?.contains("legend") == true }
+            val legendImageURL = legend?.let { allPrintings[it.nameSlug]?.firstOrNull { p -> !p.imageURL.isNullOrEmpty() }?.imageURL }
+
+            // Find champion candidates that share a tag with the legend
+            val championCandidates = if (legend != null) {
+                val legendTags = legend.tagsCsv.split(",").filter { it.isNotBlank() }.map { it.lowercase().trim() }.toSet()
+                locationIdentities.filter { identity ->
+                    identity.cardType?.lowercase()?.let { type ->
+                        type.contains("champion") || type.contains("unit")
+                    } == true
+                }.filter { identity ->
+                    val cardTags = identity.tagsCsv.split(",").filter { it.isNotBlank() }.map { it.lowercase().trim() }.toSet()
+                    cardTags.intersect(legendTags).isNotEmpty()
+                }.map { identity ->
+                    val imageURL = allPrintings[identity.nameSlug]?.firstOrNull { p -> !p.imageURL.isNullOrEmpty() }?.imageURL
+                    ChampionCandidate(
+                        nameSlug = identity.nameSlug,
+                        displayName = identity.displayName,
+                        imageURL = imageURL,
+                    )
+                }
+            } else {
+                emptyList()
+            }
+
+            onResult(
+                legend?.nameSlug,
+                legend?.displayName,
+                legendImageURL,
+                championCandidates,
+            )
+        }
+    }
+
+    /**
+     * Create a deck from a location with a specified legend and champion.
+     * All cards from the location go to main deck (except legend and champion).
+     */
+    fun createDeckFromLocationWithLegend(
+        locationName: String,
+        deckName: String,
+        legendNameSlug: String,
+        championNameSlug: String?,
+    ) {
+        viewModelScope.launch {
+            _importState.value = ImportUiState(isImporting = true)
+            try {
+                // Check if location is already linked to a deck
+                val policy = locationPolicyDao.getByName(locationName)
+                if (policy?.linkedDeckId != null) {
+                    _importState.value = ImportUiState(
+                        error = "Location \"${policy.displayName}\" is already linked to a deck.",
+                    )
+                    return@launch
+                }
+
+                val lines = inventoryLineDao.getByLocation(locationName)
+                if (lines.isEmpty()) {
+                    _importState.value = ImportUiState(error = "No cards found in location: $locationName")
+                    return@launch
+                }
+
+                val printingsByProductId = cardPrintingDao.getAll().first().associateBy { it.productID }
+                val deckId = UUID.randomUUID().toString()
+                val now = System.currentTimeMillis()
+                val name = deckName.ifBlank { "$locationName Deck" }
+
+                deckDao.insertDeck(DeckEntity(
+                    id = deckId,
+                    name = name,
+                    state = "planned",
+                    rulesetId = "riftbound",
+                    createdAt = now,
+                    updatedAt = now,
+                    linkedLocationName = locationName,
+                ))
+
+                // Add legend
+                val entries = mutableListOf<DeckEntryEntity>()
+                entries.add(DeckEntryEntity(
+                    deckId = deckId,
+                    zone = DeckZone.legend.name,
+                    nameSlug = legendNameSlug,
+                    quantity = 1,
+                ))
+
+                // Add champion if specified
+                if (championNameSlug != null) {
+                    entries.add(DeckEntryEntity(
+                        deckId = deckId,
+                        zone = DeckZone.chosenChampion.name,
+                        nameSlug = championNameSlug,
+                        quantity = 1,
+                    ))
+                }
+
+                // Add all other cards to main deck (excluding legend and champion)
+                val mainDeckCards = lines
+                    .mapNotNull { line ->
+                        val nameSlug = printingsByProductId[line.productId]?.nameSlug ?: return@mapNotNull null
+                        nameSlug to line.quantity
+                    }
+                    .filter { it.first != legendNameSlug && it.first != championNameSlug }
+                    .groupBy { it.first }
+                    .map { (nameSlug, group) ->
+                        DeckEntryEntity(
+                            deckId = deckId,
+                            zone = DeckZone.main.name,
+                            nameSlug = nameSlug,
+                            quantity = group.sumOf { it.second },
+                        )
+                    }
+                entries.addAll(mainDeckCards)
+
+                deckDao.insertEntries(entries)
+
+                val count = deckDao.getEntryCount(deckId)
+                _importState.value = ImportUiState(
+                    success = DeckSummary(deckId, name, count, now),
+                )
+                loadDecks()
+            } catch (e: Exception) {
+                _importState.value = ImportUiState(error = e.message ?: "Failed to import from location")
+            }
+        }
+    }
+
+    /**
+     * Get champion candidates from the catalog that share a tag with the given legend.
+     */
+    fun getChampionCandidatesForLegend(
+        legendNameSlug: String,
+        onResult: (List<ChampionCandidate>) -> Unit,
+    ) {
+        viewModelScope.launch {
+            val identities = cardIdentityDao.getAll().first()
+            val allPrintings = cardPrintingDao.getAll().first().groupBy { it.nameSlug }
+            val legend = identities.find { it.nameSlug == legendNameSlug }
+            val legendTags = legend?.tagsCsv?.split(",")?.filter { it.isNotBlank() }?.map { it.lowercase().trim() }?.toSet() ?: emptySet()
+
+            val champions = identities
+                .filter { identity ->
+                    identity.cardType?.lowercase()?.let { type ->
+                        type.contains("champion") || type.contains("unit")
+                    } == true
+                }
+                .filter { identity ->
+                    val cardTags = identity.tagsCsv.split(",").filter { it.isNotBlank() }.map { it.lowercase().trim() }.toSet()
+                    cardTags.intersect(legendTags).isNotEmpty()
+                }
+                .map { identity ->
+                    val imageURL = allPrintings[identity.nameSlug]?.firstOrNull { p -> !p.imageURL.isNullOrEmpty() }?.imageURL
+                    ChampionCandidate(
+                        nameSlug = identity.nameSlug,
+                        displayName = identity.displayName,
+                        imageURL = imageURL,
+                    )
+                }
+            onResult(champions)
+        }
+    }
+
+    /**
+     * Get all legend cards from the catalogue for the legend picker.
+     */
+    fun getLegendCards(onResult: (List<com.riftcompanion.app.domain.model.CatalogueCardSummary>) -> Unit) {
+        viewModelScope.launch {
+            val identities = cardIdentityDao.getAll().first()
+            val printings = cardPrintingDao.getAll().first().groupBy { it.nameSlug }
+            val legends = identities
+                .filter { it.cardType?.lowercase()?.contains("legend") == true }
+                .map { identity ->
+                    val prints = printings[identity.nameSlug] ?: emptyList()
+                    com.riftcompanion.app.domain.model.CatalogueCardSummary(
+                        identity = com.riftcompanion.app.domain.model.CardIdentity(
+                            nameSlug = identity.nameSlug,
+                            displayName = identity.displayName,
+                            cardType = identity.cardType,
+                            superType = identity.superType,
+                            domains = identity.domainsCsv.split(",").filter { it.isNotBlank() },
+                            tags = identity.tagsCsv.split(",").filter { it.isNotBlank() },
+                        ),
+                        preferredPrinting = prints.firstOrNull()?.let { printing ->
+                            com.riftcompanion.app.domain.model.CataloguePrintingMetadata(
+                                productID = printing.productID,
+                                printingSlug = printing.printingSlug,
+                                imageURL = printing.imageURL,
+                            )
+                        },
+                        printingCount = prints.size,
+                        expansionSlugs = prints.mapNotNull { it.expansionSlug }.distinct(),
+                        rarities = prints.mapNotNull { it.rarity }.distinct(),
+                    )
+                }
+            onResult(legends)
         }
     }
 
@@ -467,12 +755,20 @@ class DeckViewModel @Inject constructor(
                 val storageLocationNames = storageLocations.map { it.normalizedName }.toSet()
 
                 // For each deck entry, find available cards in storage
+                // Runes and battlefields are always available — they don't need to be in inventory
                 val movements = mutableListOf<CardMovement>()
                 val missing = mutableListOf<MissingCard>()
 
                 for (entry in entries) {
                     val displayName = identities[entry.nameSlug]?.displayName ?: entry.nameSlug
                     val needed = entry.quantity
+                    val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
+
+                    if (zone == DeckZone.rune || zone == DeckZone.battlefield) {
+                        // Runes and battlefields are always available — no movement needed
+                        // They will be created directly in the deck location during build
+                        continue
+                    }
 
                     // Find all inventory lines for this card in storage locations
                     val lines = inventoryLineDao.getBySlug(entry.nameSlug)
@@ -602,14 +898,50 @@ class DeckViewModel @Inject constructor(
                 // Mark deck entries as built with source tracking
                 val existingEntries = deckDao.getEntriesForDeck(preview.deckId)
                 for (entry in existingEntries) {
+                    val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
                     val movement = preview.movements.find { it.nameSlug == entry.nameSlug }
-                    updatedEntries.add(entry.copy(
-                        isBuilt = true,
-                        sourceLocationName = movement?.fromLocation,
-                    ))
+                    if (zone == DeckZone.rune || zone == DeckZone.battlefield) {
+                        // Runes and battlefields: always available, no source location
+                        updatedEntries.add(entry.copy(
+                            isBuilt = true,
+                            sourceLocationName = null, // created in deck location, not moved from storage
+                        ))
+                    } else {
+                        updatedEntries.add(entry.copy(
+                            isBuilt = true,
+                            sourceLocationName = movement?.fromLocation,
+                        ))
+                    }
                 }
                 deckDao.deleteEntriesForDeck(preview.deckId)
                 deckDao.insertEntries(updatedEntries)
+
+                // Create rune and battlefield lines directly in the deck location
+                val allPrintings = cardPrintingDao.getAll().first().associateBy { it.nameSlug }
+                for (entry in existingEntries) {
+                    val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
+                    if (zone == DeckZone.rune || zone == DeckZone.battlefield) {
+                        val printing = allPrintings[entry.nameSlug] ?: continue
+                        val newLineId = "${entry.nameSlug}_${deckLocationNormalized}_${System.currentTimeMillis()}"
+                        inventoryLineDao.insertAll(listOf(
+                            InventoryLineEntity(
+                                id = newLineId,
+                                customId = null,
+                                productId = printing.productID,
+                                finish = "normal",
+                                condition = null,
+                                language = null,
+                                quantity = entry.quantity,
+                                locationName = deckLocationNormalized,
+                                tagsCsv = "",
+                                comment = null,
+                                notes = null,
+                                forSale = false,
+                                updatedAt = System.currentTimeMillis().toString(),
+                            ),
+                        ))
+                    }
+                }
 
                 // Link location to deck and mark as assembled
                 val deck = deckDao.getDeck(preview.deckId)
@@ -687,6 +1019,61 @@ class DeckViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Update deck detail UI state incrementally — only recompute the changed
+     * entry's availability, keep the rest as-is. Much smoother than full reload.
+     */
+    private suspend fun updateDeckDetailIncremental(deckId: String) {
+        val current = _deckDetailState.value
+        if (current.isLoading || current.deck == null) {
+            loadDeckDetail(deckId)
+            return
+        }
+
+        val entries = deckDao.getEntriesForDeck(deckId)
+        val identities = cardIdentityDao.getAll().first().associateBy { it.nameSlug }
+        val allPrintings = cardPrintingDao.getAll().first().groupBy { it.nameSlug }
+        val storageLocations = locationPolicyDao.getStorageLocations().map { it.normalizedName }.toSet()
+        val deckLocations = locationPolicyDao.getByKind("deck").map { it.normalizedName }.toSet()
+        val linkedLoc = deckDao.getDeck(deckId)?.linkedLocationName
+
+        val display = entries.map { entry ->
+            val identity = identities[entry.nameSlug]
+            val printings = allPrintings[entry.nameSlug] ?: emptyList()
+            val imageURL = printings.firstOrNull { !it.imageURL.isNullOrEmpty() }?.imageURL
+                ?: printings.firstOrNull()?.imageURL
+            val allLines = inventoryLineDao.getBySlug(entry.nameSlug)
+            val inStorage = allLines.filter { it.locationName in storageLocations }.sumOf { it.quantity }
+            val inDecks = allLines.filter { it.locationName in deckLocations && it.locationName != linkedLoc }.sumOf { it.quantity }
+            val total = allLines.sumOf { it.quantity }
+            val missing = maxOf(0, entry.quantity - inStorage)
+
+            DeckEntryDisplay(
+                entryId = entry.id,
+                zone = DeckZone.fromString(entry.zone) ?: DeckZone.main,
+                nameSlug = entry.nameSlug,
+                displayName = identity?.displayName ?: entry.nameSlug,
+                quantity = entry.quantity,
+                preferredImageURL = imageURL,
+                cardType = identity?.cardType,
+                expansion = printings.firstOrNull()?.expansionSlug,
+                rarity = printings.firstOrNull()?.rarity,
+                domains = identity?.tagsCsv?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
+                availableInStorage = inStorage,
+                inOtherDecks = inDecks,
+                totalOwned = total,
+                isMissing = missing > 0,
+                missingCount = missing,
+            )
+        }
+
+        _deckDetailState.value = DeckDetailUiState(
+            deck = current.deck?.copy(cardCount = entries.sumOf { it.quantity }),
+            entries = display.groupBy { it.zone }.flatMap { (_, items) -> items.sortedBy { it.displayName } },
+            isLoading = false,
+        )
+    }
+
     fun clearBuildState() {
         _buildState.value = DeckBuildUiState()
     }
@@ -694,8 +1081,21 @@ class DeckViewModel @Inject constructor(
     // ── Deck editing ───────────────────────────────────────────────────
 
     /**
+     * Get the domains of the legend card in a deck, for filtering the catalog picker.
+     */
+    fun getLegendDomains(deckId: String, onResult: (List<String>) -> Unit) {
+        viewModelScope.launch {
+            val entries = deckDao.getEntriesForDeck(deckId)
+            val identities = cardIdentityDao.getAll().first().associateBy { it.nameSlug }
+            val legendEntry = entries.firstOrNull { it.zone == DeckZone.legend.name }
+            val domains = legendEntry?.let { identities[it.nameSlug]?.domainsCsv?.split(",")?.filter { it.isNotBlank() } } ?: emptyList()
+            onResult(domains)
+        }
+    }
+
+    /**
      * Add a card to a deck in the specified zone. If the card already exists
-     * in that zone, increases the quantity.
+     * in that zone, increases the quantity. Updates UI state incrementally.
      */
     fun addCardToDeck(deckId: String, nameSlug: String, zone: DeckZone, quantity: Int = 1) {
         viewModelScope.launch {
@@ -717,13 +1117,14 @@ class DeckViewModel @Inject constructor(
                     ),
                 ))
             }
-            loadDeckDetail(deckId)
-            loadDecks()
+            // Update UI state incrementally instead of full reload
+            updateDeckDetailIncremental(deckId)
         }
     }
 
     /**
      * Remove a card from a deck (reduce quantity or remove entirely).
+     * Updates UI state incrementally.
      */
     fun removeCardFromDeck(deckId: String, nameSlug: String, zone: DeckZone, quantity: Int = 1) {
         viewModelScope.launch {
@@ -741,8 +1142,7 @@ class DeckViewModel @Inject constructor(
                     deckDao.insertEntries(entries.filter { it.id != existing.id })
                 }
             }
-            loadDeckDetail(deckId)
-            loadDecks()
+            updateDeckDetailIncremental(deckId)
         }
     }
 

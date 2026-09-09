@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,8 +25,10 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,7 +48,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -158,29 +163,12 @@ fun DeckListScreen(
         }
     }
 
-    // Create empty deck dialog
+    // Create empty deck — legend picker funnel
     if (showCreateDialog) {
-        var name by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { showCreateDialog = false },
-            title = { Text("New empty deck") },
-            text = {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Deck name") },
-                    singleLine = true,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.createEmptyDeck(name)
-                    showCreateDialog = false
-                }) { Text("Create") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCreateDialog = false }) { Text("Cancel") }
-            },
+        CreateDeckFunnel(
+            viewModel = viewModel,
+            onDismiss = { showCreateDialog = false },
+            onCreated = { showCreateDialog = false },
         )
     }
 
@@ -210,28 +198,23 @@ private fun DeckRow(deck: DeckSummary, onClick: () -> Unit, onDelete: () -> Unit
         cornerRadius = 14,
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Status icon
-            when {
-                deck.isBuilt -> Icon(
-                    Icons.Default.Build,
-                    contentDescription = "Built",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp),
+            // Legend artwork
+            if (deck.legendImageURL != null) {
+                com.riftcompanion.app.ui.components.CardArtwork(
+                    imageURL = deck.legendImageURL,
+                    name = deck.legendDisplayName ?: "",
+                    modifier = Modifier.width(44.dp).height(62.dp),
+                    cornerRadius = 6,
                 )
-                deck.isLegal -> Icon(
-                    Icons.Default.CheckCircle,
-                    contentDescription = "Legal",
-                    tint = com.riftcompanion.app.ui.theme.freeColor(),
-                    modifier = Modifier.size(24.dp),
-                )
-                else -> Icon(
-                    Icons.Default.Error,
-                    contentDescription = "Not legal",
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(24.dp),
+            } else {
+                Icon(
+                    Icons.Default.Style,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(44.dp),
                 )
             }
             Spacer(Modifier.size(12.dp))
@@ -270,4 +253,144 @@ private fun DeckRow(deck: DeckSummary, onClick: () -> Unit, onDelete: () -> Unit
             }
         }
     }
+}
+
+/**
+ * Multi-step funnel for creating a new empty deck:
+ * Step 1: Pick a Legend card (required)
+ * Step 2: Name the deck and create
+ */
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun CreateDeckFunnel(
+    viewModel: DeckViewModel,
+    onDismiss: () -> Unit,
+    onCreated: () -> Unit,
+) {
+    val importState by viewModel.importState.collectAsStateWithLifecycle()
+
+    var legends by remember { mutableStateOf<List<com.riftcompanion.app.domain.model.CatalogueCardSummary>>(emptyList()) }
+    var selectedLegend by remember { mutableStateOf<com.riftcompanion.app.domain.model.CatalogueCardSummary?>(null) }
+    var deckName by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        viewModel.getLegendCards { legends = it }
+    }
+
+    // Auto-suggest deck name from legend
+    LaunchedEffect(selectedLegend) {
+        if (deckName.isBlank() && selectedLegend != null) {
+            deckName = "${selectedLegend!!.identity.displayName.split(",").firstOrNull()?.trim() ?: "New"} Deck"
+        }
+    }
+
+    // Handle creation success
+    LaunchedEffect(importState.success) {
+        if (importState.success != null) {
+            viewModel.clearImportState()
+            onCreated()
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (selectedLegend == null) "Select a Legend" else "Name Your Deck") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (selectedLegend == null) {
+                    // Step 1: Legend picker
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Search legends…") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    val filtered = if (searchQuery.isBlank()) legends
+                        else legends.filter { it.identity.displayName.contains(searchQuery, ignoreCase = true) }
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.height(300.dp),
+                    ) {
+                        items(filtered, key = { it.id }) { legend ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { selectedLegend = legend }
+                                    .padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                com.riftcompanion.app.ui.components.CardArtwork(
+                                    imageURL = legend.preferredImageURL,
+                                    name = legend.identity.displayName,
+                                    modifier = Modifier.width(36.dp).height(50.dp),
+                                    cornerRadius = 4,
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(legend.identity.displayName, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                    val domains = legend.identity.appVisibleDomains
+                                    if (domains.isNotEmpty()) {
+                                        Text(domains.joinToString(", "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Step 2: Name the deck
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        com.riftcompanion.app.ui.components.CardArtwork(
+                            imageURL = selectedLegend!!.preferredImageURL,
+                            name = selectedLegend!!.identity.displayName,
+                            modifier = Modifier.width(44.dp).height(62.dp),
+                            cornerRadius = 6,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(selectedLegend!!.identity.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Text("Legend", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                    OutlinedTextField(
+                        value = deckName,
+                        onValueChange = { deckName = it },
+                        label = { Text("Deck name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    TextButton(onClick = { selectedLegend = null }) {
+                        Text("Change Legend")
+                    }
+                }
+                importState.error?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            if (selectedLegend != null) {
+                TextButton(
+                    onClick = {
+                        viewModel.createEmptyDeck(deckName, selectedLegend!!.id)
+                    },
+                    enabled = !importState.isImporting,
+                ) {
+                    if (importState.isImporting) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Creating…")
+                    } else {
+                        Text("Create Deck")
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
