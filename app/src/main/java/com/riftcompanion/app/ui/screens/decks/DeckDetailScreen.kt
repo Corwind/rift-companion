@@ -540,16 +540,14 @@ private fun AddCardSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var searchQuery by remember { mutableStateOf("") }
     var legendDomains by remember { mutableStateOf<List<String>>(emptyList()) }
+    var legendTags by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    // Auto-select first missing zone in priority order
-    val zonePriority = listOf(
-        DeckZone.legend,
-        DeckZone.chosenChampion,
-        DeckZone.main,
-        DeckZone.rune,
-        DeckZone.battlefield,
-        DeckZone.sideboard,
-    )
+    // Auto-select first missing zone in priority order (skip legend if already has one)
+    val zonePriority = if (DeckZone.legend in zonesWithCards) {
+        listOf(DeckZone.chosenChampion, DeckZone.main, DeckZone.rune, DeckZone.battlefield, DeckZone.sideboard)
+    } else {
+        listOf(DeckZone.legend, DeckZone.chosenChampion, DeckZone.main, DeckZone.rune, DeckZone.battlefield, DeckZone.sideboard)
+    }
     var selectedZone by remember {
         mutableStateOf(zonePriority.firstOrNull { it !in zonesWithCards } ?: DeckZone.main)
     }
@@ -557,17 +555,47 @@ private fun AddCardSheet(
 
     LaunchedEffect(deckId) {
         deckViewModel.getLegendDomains(deckId) { legendDomains = it }
+        deckViewModel.getLegendTags(deckId) { legendTags = it }
     }
 
     LaunchedEffect(searchQuery) { catalogueViewModel.setSearchQuery(searchQuery) }
 
-    // Filter cards by domain (except battlefields)
-    val filteredCards = if (selectedZone == DeckZone.battlefield || legendDomains.isEmpty()) {
-        catalogueState.cards
-    } else {
-        catalogueState.cards.filter { card ->
-            val cardDomains = card.identity.appVisibleDomains
-            cardDomains.isEmpty() || cardDomains.any { it in legendDomains }
+    // Filter cards by zone type
+    val filteredCards = catalogueState.cards.filter { card ->
+        val cardType = card.identity.cardType?.lowercase() ?: ""
+        val cardTags = card.identity.tags.map { it.lowercase().trim() }
+        when (selectedZone) {
+            DeckZone.legend -> cardType.contains("legend")
+            DeckZone.chosenChampion -> {
+                // Champions/units that share a tag with the legend
+                (cardType.contains("champion") || cardType.contains("unit")) &&
+                    (legendTags.isEmpty() || cardTags.any { it in legendTags })
+            }
+            DeckZone.rune -> {
+                // Runes that match the legend's domains
+                if (!cardType.contains("rune")) {
+                    false
+                } else if (legendDomains.isEmpty()) {
+                    true
+                } else {
+                    val cardDomains = card.identity.appVisibleDomains
+                    cardDomains.isEmpty() || cardDomains.any { it in legendDomains }
+                }
+            }
+            DeckZone.battlefield -> cardType.contains("battlefield")
+            DeckZone.main, DeckZone.sideboard -> {
+                // Exclude legends, runes, battlefields
+                if (cardType.contains("legend") || cardType.contains("rune") || cardType.contains("battlefield")) {
+                    false
+                } else if (legendDomains.isEmpty()) {
+                    true // No legend set yet, allow all
+                } else {
+                    // Must match legend's domains
+                    val cardDomains = card.identity.appVisibleDomains
+                    cardDomains.isEmpty() || cardDomains.any { it in legendDomains }
+                }
+            }
+            else -> true
         }
     }
 

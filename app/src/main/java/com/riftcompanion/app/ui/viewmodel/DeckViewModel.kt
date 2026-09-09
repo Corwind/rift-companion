@@ -216,6 +216,7 @@ class DeckViewModel @Inject constructor(
             val deckLocations = locationPolicyDao.getByKind("deck").map { it.normalizedName }.toSet()
 
             // For each entry, compute availability
+            val linkedLoc = deck?.linkedLocationName
             val display = entries.map { entry ->
                 val identity = identities[entry.nameSlug]
                 val printings = allPrintings[entry.nameSlug] ?: emptyList()
@@ -224,13 +225,19 @@ class DeckViewModel @Inject constructor(
                 // Find all inventory lines for this card
                 val allLines = inventoryLineDao.getBySlug(entry.nameSlug)
                 val inStorage = allLines.filter { it.locationName in storageLocations }.sumOf { it.quantity }
-                val inDecks = allLines.filter { it.locationName in deckLocations && it.locationName != deck?.linkedLocationName }.sumOf { it.quantity }
+                // Cards already at the deck location count as available
+                val inDeckLocation = allLines.filter { it.locationName == linkedLoc }.sumOf { it.quantity }
+                val inDecks = allLines.filter { it.locationName in deckLocations && it.locationName != linkedLoc }.sumOf { it.quantity }
                 val total = allLines.sumOf { it.quantity }
-                val missing = maxOf(0, entry.quantity - inStorage)
+                val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
+                // Runes and battlefields are never missing
+                val isRuneOrBattlefield = zone == DeckZone.rune || zone == DeckZone.battlefield
+                val availableTotal = if (isRuneOrBattlefield) entry.quantity else inStorage + inDeckLocation
+                val missing = if (isRuneOrBattlefield) 0 else maxOf(0, entry.quantity - availableTotal)
 
                 DeckEntryDisplay(
                     entryId = entry.id,
-                    zone = DeckZone.fromString(entry.zone) ?: DeckZone.main,
+                    zone = zone,
                     nameSlug = entry.nameSlug,
                     displayName = identity?.displayName ?: entry.nameSlug,
                     quantity = entry.quantity,
@@ -239,11 +246,11 @@ class DeckViewModel @Inject constructor(
                     expansion = printings.firstOrNull()?.expansionSlug,
                     rarity = printings.firstOrNull()?.rarity,
                     domains = identity?.tagsCsv?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
-                    availableInStorage = if (DeckZone.fromString(entry.zone) == DeckZone.rune || DeckZone.fromString(entry.zone) == DeckZone.battlefield) entry.quantity else inStorage,
-                    inOtherDecks = if (DeckZone.fromString(entry.zone) == DeckZone.rune || DeckZone.fromString(entry.zone) == DeckZone.battlefield) 0 else inDecks,
-                    totalOwned = if (DeckZone.fromString(entry.zone) == DeckZone.rune || DeckZone.fromString(entry.zone) == DeckZone.battlefield) entry.quantity else total,
-                    isMissing = if (DeckZone.fromString(entry.zone) == DeckZone.rune || DeckZone.fromString(entry.zone) == DeckZone.battlefield) false else missing > 0,
-                    missingCount = if (DeckZone.fromString(entry.zone) == DeckZone.rune || DeckZone.fromString(entry.zone) == DeckZone.battlefield) 0 else missing,
+                    availableInStorage = if (isRuneOrBattlefield) entry.quantity else inStorage + inDeckLocation,
+                    inOtherDecks = if (isRuneOrBattlefield) 0 else inDecks,
+                    totalOwned = if (isRuneOrBattlefield) entry.quantity else total,
+                    isMissing = missing > 0,
+                    missingCount = missing,
                 )
             }
             // Compute legality
@@ -764,12 +771,6 @@ class DeckViewModel @Inject constructor(
                     val needed = entry.quantity
                     val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
 
-                    if (zone == DeckZone.rune || zone == DeckZone.battlefield) {
-                        // Runes and battlefields are always available — no movement needed
-                        // They will be created directly in the deck location during build
-                        continue
-                    }
-
                     // Find all inventory lines for this card in storage locations
                     val lines = inventoryLineDao.getBySlug(entry.nameSlug)
                         .filter { it.locationName in storageLocationNames }
@@ -789,7 +790,9 @@ class DeckViewModel @Inject constructor(
                         remaining -= take
                     }
 
-                    if (remaining > 0) {
+                    // For runes and battlefields: remaining cards are created at deck location (not missing)
+                    // For other zones: remaining cards are missing
+                    if (remaining > 0 && zone != DeckZone.rune && zone != DeckZone.battlefield) {
                         val available = needed - remaining
                         missing.add(MissingCard(
                             nameSlug = entry.nameSlug,
@@ -899,29 +902,38 @@ class DeckViewModel @Inject constructor(
                 val existingEntries = deckDao.getEntriesForDeck(preview.deckId)
                 for (entry in existingEntries) {
                     val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
-                    val movement = preview.movements.find { it.nameSlug == entry.nameSlug }
+                    // Sum up how many were moved from storage for this card
+                    val movedFromStorage = preview.movements
+                        .filter { it.nameSlug == entry.nameSlug }
+                        .sumOf { it.quantity }
                     if (zone == DeckZone.rune || zone == DeckZone.battlefield) {
-                        // Runes and battlefields: always available, no source location
+                        // Runes and battlefields: moved ones have source, rest created at deck location
                         updatedEntries.add(entry.copy(
                             isBuilt = true,
-                            sourceLocationName = null, // created in deck location, not moved from storage
+                            sourceLocationName = if (movedFromStorage > 0) preview.movements.first { it.nameSlug == entry.nameSlug }.fromLocation else null,
                         ))
                     } else {
                         updatedEntries.add(entry.copy(
                             isBuilt = true,
-                            sourceLocationName = movement?.fromLocation,
+                            sourceLocationName = preview.movements.find { it.nameSlug == entry.nameSlug }?.fromLocation,
                         ))
                     }
                 }
                 deckDao.deleteEntriesForDeck(preview.deckId)
                 deckDao.insertEntries(updatedEntries)
 
-                // Create rune and battlefield lines directly in the deck location
+                // Create remaining rune/battlefield lines (shortfall after moving from storage) at deck location
                 val allPrintings = cardPrintingDao.getAll().first().associateBy { it.nameSlug }
                 for (entry in existingEntries) {
                     val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
                     if (zone == DeckZone.rune || zone == DeckZone.battlefield) {
                         val printing = allPrintings[entry.nameSlug] ?: continue
+                        // Only create the shortfall (not already moved from storage)
+                        val movedFromStorage = preview.movements
+                            .filter { it.nameSlug == entry.nameSlug }
+                            .sumOf { it.quantity }
+                        val toCreate = entry.quantity - movedFromStorage
+                        if (toCreate <= 0) continue
                         val newLineId = "${entry.nameSlug}_${deckLocationNormalized}_${System.currentTimeMillis()}"
                         inventoryLineDao.insertAll(listOf(
                             InventoryLineEntity(
@@ -931,7 +943,7 @@ class DeckViewModel @Inject constructor(
                                 finish = "normal",
                                 condition = null,
                                 language = null,
-                                quantity = entry.quantity,
+                                quantity = toCreate,
                                 locationName = deckLocationNormalized,
                                 tagsCsv = "",
                                 comment = null,
@@ -1044,13 +1056,17 @@ class DeckViewModel @Inject constructor(
                 ?: printings.firstOrNull()?.imageURL
             val allLines = inventoryLineDao.getBySlug(entry.nameSlug)
             val inStorage = allLines.filter { it.locationName in storageLocations }.sumOf { it.quantity }
+            val inDeckLocation = allLines.filter { it.locationName == linkedLoc }.sumOf { it.quantity }
             val inDecks = allLines.filter { it.locationName in deckLocations && it.locationName != linkedLoc }.sumOf { it.quantity }
             val total = allLines.sumOf { it.quantity }
-            val missing = maxOf(0, entry.quantity - inStorage)
+            val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
+            val isRuneOrBattlefield = zone == DeckZone.rune || zone == DeckZone.battlefield
+            val availableTotal = if (isRuneOrBattlefield) entry.quantity else inStorage + inDeckLocation
+            val missing = if (isRuneOrBattlefield) 0 else maxOf(0, entry.quantity - availableTotal)
 
             DeckEntryDisplay(
                 entryId = entry.id,
-                zone = DeckZone.fromString(entry.zone) ?: DeckZone.main,
+                zone = zone,
                 nameSlug = entry.nameSlug,
                 displayName = identity?.displayName ?: entry.nameSlug,
                 quantity = entry.quantity,
@@ -1059,9 +1075,9 @@ class DeckViewModel @Inject constructor(
                 expansion = printings.firstOrNull()?.expansionSlug,
                 rarity = printings.firstOrNull()?.rarity,
                 domains = identity?.tagsCsv?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
-                availableInStorage = inStorage,
-                inOtherDecks = inDecks,
-                totalOwned = total,
+                availableInStorage = if (isRuneOrBattlefield) entry.quantity else inStorage + inDeckLocation,
+                inOtherDecks = if (isRuneOrBattlefield) 0 else inDecks,
+                totalOwned = if (isRuneOrBattlefield) entry.quantity else total,
                 isMissing = missing > 0,
                 missingCount = missing,
             )
@@ -1090,6 +1106,19 @@ class DeckViewModel @Inject constructor(
             val legendEntry = entries.firstOrNull { it.zone == DeckZone.legend.name }
             val domains = legendEntry?.let { identities[it.nameSlug]?.domainsCsv?.split(",")?.filter { it.isNotBlank() } } ?: emptyList()
             onResult(domains)
+        }
+    }
+
+    /**
+     * Get the tags of the legend card in a deck, for champion filtering.
+     */
+    fun getLegendTags(deckId: String, onResult: (List<String>) -> Unit) {
+        viewModelScope.launch {
+            val entries = deckDao.getEntriesForDeck(deckId)
+            val identities = cardIdentityDao.getAll().first().associateBy { it.nameSlug }
+            val legendEntry = entries.firstOrNull { it.zone == DeckZone.legend.name }
+            val tags = legendEntry?.let { identities[it.nameSlug]?.tagsCsv?.split(",")?.filter { it.isNotBlank() }?.map { it.lowercase().trim() } } ?: emptyList()
+            onResult(tags)
         }
     }
 
