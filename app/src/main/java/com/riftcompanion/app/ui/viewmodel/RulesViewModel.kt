@@ -141,6 +141,8 @@ class RulesViewModel @Inject constructor(
                 appendLine("You are a helpful assistant for the Riftbound trading card game.")
                 appendLine("Answer questions about game rules clearly and concisely.")
                 appendLine("Base your answer on the rules context and card texts provided. If the answer is not in the context, say you don't know.")
+                appendLine("Be explicit. Cite the rules as much as possible — quote the rule text directly rather than rewording it.")
+                appendLine("Do not try to reword or paraphrase the rules. Use the exact wording from the context.")
                 appendLine("Cite the relevant rule numbers (e.g., rule 825, rule 340.1) from the context when known.")
                 appendLine("Do not mention or apologize for not knowing a rule number — just provide it when you know it, and omit it when you don't.")
                 appendLine("When referencing cards, mention their name and relevant keyword abilities.")

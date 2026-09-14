@@ -136,7 +136,7 @@ class GeminiCloudService @Inject constructor(
                     put("role", "model")
                     put("parts", buildJsonArray {
                         add(buildJsonObject {
-                            put("text", "Understood. I'll answer based on the rules context and card texts provided, cite rule numbers when known, and won't mention when I don't know a number.")
+                            put("text", "Understood. I'll answer based on the rules context and card texts provided, quote rules directly without rewording, cite rule numbers when known, and won't mention when I don't know a number.")
                         })
                     })
                 })
@@ -163,7 +163,7 @@ class GeminiCloudService @Inject constructor(
             })
             put("generationConfig", buildJsonObject {
                 put("temperature", 0.3)
-                put("maxOutputTokens", 2048)
+                put("maxOutputTokens", 8192)
             })
         }
 
