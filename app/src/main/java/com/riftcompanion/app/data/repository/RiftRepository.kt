@@ -1,6 +1,8 @@
 package com.riftcompanion.app.data.repository
 
+import com.riftcompanion.app.data.api.BanlistFetcher
 import com.riftcompanion.app.data.api.CardNexusClient
+import com.riftcompanion.app.data.db.BanlistDao
 import com.riftcompanion.app.data.db.CardIdentityDao
 import com.riftcompanion.app.data.db.CardPrintingDao
 import com.riftcompanion.app.data.db.EntityConverter
@@ -9,6 +11,8 @@ import com.riftcompanion.app.data.db.InventoryLocationDao
 import com.riftcompanion.app.data.db.LocationPolicyDao
 import com.riftcompanion.app.data.db.SyncMetadataDao
 import kotlinx.coroutines.flow.first
+import com.riftcompanion.app.domain.model.BanlistEntry
+import com.riftcompanion.app.domain.model.BanlistEntryType
 import com.riftcompanion.app.domain.model.CardAvailability
 import com.riftcompanion.app.domain.model.CardIdentity
 import com.riftcompanion.app.domain.model.CatalogueCardSummary
@@ -40,12 +44,14 @@ import javax.inject.Singleton
 @Singleton
 class RiftRepository @Inject constructor(
     private val cardNexusClient: CardNexusClient,
+    private val banlistFetcher: BanlistFetcher,
     private val cardIdentityDao: CardIdentityDao,
     private val cardPrintingDao: CardPrintingDao,
     private val inventoryLineDao: InventoryLineDao,
     private val inventoryLocationDao: InventoryLocationDao,
     private val locationPolicyDao: LocationPolicyDao,
     private val syncMetadataDao: SyncMetadataDao,
+    private val banlistDao: BanlistDao,
 ) {
 
     // ── Sync ────────────────────────────────────────────────────────────
@@ -110,6 +116,20 @@ class RiftRepository @Inject constructor(
                         ),
                     )
                 }
+            }
+
+            // 6. Fetch and store banlist (best-effort, non-fatal)
+            runCatching {
+                val banlist = banlistFetcher.fetchBanlist().getOrThrow()
+                banlistDao.replaceAll(banlist.map { entry ->
+                    com.riftcompanion.app.data.db.BanlistEntity(
+                        cardName = entry.cardName,
+                        cardType = if (entry.cardType == BanlistEntryType.CARD) "card" else "battlefield",
+                        format = entry.format,
+                        effectiveDate = entry.effectiveDate,
+                        sourceUrl = entry.sourceUrl,
+                    )
+                })
             }
 
             val completedAt = System.currentTimeMillis()
@@ -201,6 +221,39 @@ class RiftRepository @Inject constructor(
      * move is attempted.
      */
     suspend fun verifyCredential(): Result<Unit> = cardNexusClient.verifyCredential()
+
+    // ── Banlist ────────────────────────────────────────────────────────
+
+    fun banlistFlow(): Flow<List<BanlistEntry>> = banlistDao.getAll().map { entities ->
+        entities.map { e ->
+            BanlistEntry(
+                cardName = e.cardName,
+                cardType = if (e.cardType == "battlefield") BanlistEntryType.BATTLEFIELD else BanlistEntryType.CARD,
+                format = e.format,
+                effectiveDate = e.effectiveDate,
+                sourceUrl = e.sourceUrl,
+            )
+        }
+    }
+
+    suspend fun getBannedCardNames(): Set<String> = banlistDao.getBannedCards().map { it.cardName }.toSet()
+    suspend fun getBannedBattlefieldNames(): Set<String> = banlistDao.getBannedBattlefields().map { it.cardName }.toSet()
+
+    suspend fun fetchBanlistNow(): Result<List<BanlistEntry>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val banlist = banlistFetcher.fetchBanlist().getOrThrow()
+            banlistDao.replaceAll(banlist.map { entry ->
+                com.riftcompanion.app.data.db.BanlistEntity(
+                    cardName = entry.cardName,
+                    cardType = if (entry.cardType == BanlistEntryType.CARD) "card" else "battlefield",
+                    format = entry.format,
+                    effectiveDate = entry.effectiveDate,
+                    sourceUrl = entry.sourceUrl,
+                )
+            })
+            banlist
+        }
+    }
 
     // ── Location API mutations ─────────────────────────────────────────
 

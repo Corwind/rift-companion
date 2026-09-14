@@ -57,6 +57,25 @@ class CardDetailViewModel @Inject constructor(
     private val repository: RiftRepository,
 ) : ViewModel() {
 
+    private var cachedBannedCards: Set<String> = emptySet()
+    private var cachedBannedBattlefields: Set<String> = emptySet()
+
+    init {
+        viewModelScope.launch {
+            repository.banlistFlow().collect { entries ->
+                cachedBannedCards = entries
+                    .filter { it.cardType == com.riftcompanion.app.domain.model.BanlistEntryType.CARD }
+                    .map { it.cardName.lowercase() }.toSet()
+                cachedBannedBattlefields = entries
+                    .filter { it.cardType == com.riftcompanion.app.domain.model.BanlistEntryType.BATTLEFIELD }
+                    .map { it.cardName.lowercase() }.toSet()
+            }
+        }
+    }
+
+    fun isCardBanned(displayName: String): Boolean = displayName.lowercase() in cachedBannedCards
+    fun isBattlefieldBanned(displayName: String): Boolean = displayName.lowercase() in cachedBannedBattlefields
+
     private val _uiState = MutableStateFlow(CardDetailUiState(isLoading = true))
     val uiState: StateFlow<CardDetailUiState> = _uiState.asStateFlow()
 

@@ -8,7 +8,9 @@ import coil3.ImageLoader
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.request.crossfade
+import com.riftcompanion.app.data.api.BanlistFetcher
 import com.riftcompanion.app.data.api.CardNexusClient
+import com.riftcompanion.app.data.db.BanlistDao
 import com.riftcompanion.app.data.db.CardIdentityDao
 import com.riftcompanion.app.data.db.CardPrintingDao
 import com.riftcompanion.app.data.db.DeckDao
@@ -83,6 +85,21 @@ object AppModule {
         }
     }
 
+    // Migration from v4 → v5: add banlist table
+    val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS banlist (
+                    cardName TEXT NOT NULL PRIMARY KEY,
+                    cardType TEXT NOT NULL,
+                    format TEXT NOT NULL,
+                    effectiveDate TEXT,
+                    sourceUrl TEXT
+                )
+            """.trimIndent())
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): RiftDatabase {
@@ -91,7 +108,7 @@ object AppModule {
             RiftDatabase::class.java,
             "rift_companion.db",
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -103,6 +120,7 @@ object AppModule {
     @Provides fun provideLocationPolicyDao(db: RiftDatabase): LocationPolicyDao = db.locationPolicyDao()
     @Provides fun provideSyncMetadataDao(db: RiftDatabase): SyncMetadataDao = db.syncMetadataDao()
     @Provides fun provideDeckDao(db: RiftDatabase): DeckDao = db.deckDao()
+    @Provides fun provideBanlistDao(db: RiftDatabase): BanlistDao = db.banlistDao()
 
     @Provides
     @Singleton
@@ -134,19 +152,27 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideBanlistFetcher(okHttpClient: OkHttpClient): BanlistFetcher {
+        return BanlistFetcher(okHttpClient)
+    }
+
+    @Provides
+    @Singleton
     fun provideRepository(
         client: CardNexusClient,
+        banlistFetcher: BanlistFetcher,
         cardIdentityDao: CardIdentityDao,
         cardPrintingDao: CardPrintingDao,
         inventoryLineDao: InventoryLineDao,
         inventoryLocationDao: InventoryLocationDao,
         locationPolicyDao: LocationPolicyDao,
         syncMetadataDao: SyncMetadataDao,
+        banlistDao: BanlistDao,
     ): RiftRepository {
         return RiftRepository(
-            client, cardIdentityDao, cardPrintingDao,
+            client, banlistFetcher, cardIdentityDao, cardPrintingDao,
             inventoryLineDao, inventoryLocationDao,
-            locationPolicyDao, syncMetadataDao,
+            locationPolicyDao, syncMetadataDao, banlistDao,
         )
     }
 

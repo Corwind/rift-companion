@@ -261,7 +261,7 @@ fun InventoryScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         items(uiState.cards, key = { it.id }) { card ->
-                            InventoryGridCard(card = card, onClick = { onCardClick(card.id, true) })
+                            InventoryGridCard(card = card, isBanned = viewModel.isCardBanned(card.identity.displayName), onClick = { onCardClick(card.id, true) })
                         }
                     }
                 } else {
@@ -270,7 +270,7 @@ fun InventoryScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(uiState.cards, key = { it.id }) { card ->
-                            InventoryListRow(card = card, onClick = { onCardClick(card.id, true) })
+                            InventoryListRow(card = card, isBanned = viewModel.isCardBanned(card.identity.displayName), onClick = { onCardClick(card.id, true) })
                         }
                     }
                 }
@@ -906,18 +906,24 @@ private fun Color.luminance(): Float = 0.299f * red + 0.587f * green + 0.114f * 
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun InventoryGridCard(card: InventoryCardSummary, onClick: () -> Unit) {
+private fun InventoryGridCard(card: InventoryCardSummary, isBanned: Boolean, onClick: () -> Unit) {
     ThemedCardSurface(
         modifier = Modifier.clickable(onClick = onClick),
         cornerRadius = 14,
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = card.identity.displayName,
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = card.identity.displayName,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (isBanned) {
+                    com.riftcompanion.app.ui.components.BannedBadge()
+                }
+            }
             Spacer(Modifier.height(8.dp))
             CardArtwork(
                 imageURL = card.preferredImageURL,
@@ -949,7 +955,7 @@ private fun InventoryGridCard(card: InventoryCardSummary, onClick: () -> Unit) {
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun InventoryListRow(card: InventoryCardSummary, onClick: () -> Unit) {
+private fun InventoryListRow(card: InventoryCardSummary, isBanned: Boolean, onClick: () -> Unit) {
     ThemedCardSurface(
         modifier = Modifier
             .fillMaxWidth()
@@ -967,12 +973,18 @@ private fun InventoryListRow(card: InventoryCardSummary, onClick: () -> Unit) {
             )
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = card.identity.displayName,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = card.identity.displayName,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (isBanned) {
+                        com.riftcompanion.app.ui.components.BannedBadge()
+                    }
+                }
                 Text(
                     text = listOfNotNull(card.identity.cardType, card.expansion, card.rarity).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,

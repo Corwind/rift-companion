@@ -50,6 +50,21 @@ class InventoryViewModel @Inject constructor(
     private val repository: RiftRepository,
 ) : ViewModel() {
 
+    private var cachedBannedCards: Set<String> = emptySet()
+
+    init {
+        viewModelScope.launch {
+            repository.banlistFlow().collect { entries ->
+                cachedBannedCards = entries
+                    .filter { it.cardType == com.riftcompanion.app.domain.model.BanlistEntryType.CARD }
+                    .map { it.cardName.lowercase() }
+                    .toSet()
+            }
+        }
+    }
+
+    fun isCardBanned(cardName: String): Boolean = cardName.lowercase() in cachedBannedCards
+
     private val _searchQuery = MutableStateFlow("")
     private val _selectedLocation = MutableStateFlow<String?>(null)
     private val _domainFilters = MutableStateFlow<Set<String>>(emptySet())

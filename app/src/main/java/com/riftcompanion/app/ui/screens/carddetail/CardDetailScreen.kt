@@ -124,11 +124,17 @@ fun CardDetailScreen(
                         cornerRadius = 14,
                     )
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = identity.displayName,
-                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = identity.displayName,
+                                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (viewModel.isCardBanned(identity.displayName)) {
+                                com.riftcompanion.app.ui.components.BannedBadge()
+                            }
+                        }
                         val typeLine = listOfNotNull(identity.superType, identity.cardType)
                             .filter { it.isNotBlank() }.distinct().joinToString(" · ")
                         if (typeLine.isNotBlank()) {
