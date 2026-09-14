@@ -36,6 +36,9 @@ data class SettingsUiState(
     val dataWarningAcked: Boolean = false,
     val isMeteredConnection: Boolean = false,
     val showDataWarning: Boolean = false,
+    val geminiApiKey: String? = null,
+    val hasGeminiApiKey: Boolean = false,
+    val llmPriority: com.riftcompanion.app.data.prefs.LlmPriority = com.riftcompanion.app.data.prefs.LlmPriority.CloudFirst,
 )
 
 @HiltViewModel
@@ -64,6 +67,9 @@ class SettingsViewModel @Inject constructor(
                     setupComplete = data.setupComplete,
                     hasApiKey = credentialStore.hasApiKey(),
                     dataWarningAcked = data.dataWarningAcked,
+                    geminiApiKey = data.geminiApiKey,
+                    hasGeminiApiKey = !data.geminiApiKey.isNullOrBlank(),
+                    llmPriority = data.llmPriority,
                 )
             }
         }
@@ -100,6 +106,14 @@ class SettingsViewModel @Inject constructor(
 
     fun setDataWarningAcked(value: Boolean) {
         viewModelScope.launch { settingsDataStore.setDataWarningAcked(value) }
+    }
+
+    fun setGeminiApiKey(value: String) {
+        viewModelScope.launch { settingsDataStore.setGeminiApiKey(value) }
+    }
+
+    fun setLlmPriority(value: com.riftcompanion.app.data.prefs.LlmPriority) {
+        viewModelScope.launch { settingsDataStore.setLlmPriority(value) }
     }
 
     /**

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -48,6 +49,7 @@ import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -205,6 +207,75 @@ fun SettingsScreen(
                     }
                     Switch(checked = uiState.biometricEnabled, onCheckedChange = { viewModel.setBiometricEnabled(it) })
                 }
+            }
+
+            SettingsCard("Rules AI", Icons.Default.Psychology) {
+                var showKeyInput by remember { mutableStateOf(false) }
+                var keyInput by remember { mutableStateOf("") }
+
+                // Gemini API key
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Key, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    }
+                    Spacer(Modifier.size(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Gemini API key", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                        Text(
+                            if (uiState.hasGeminiApiKey) "Configured — cloud AI enabled" else "Optional — enables cloud AI for rules search",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (uiState.hasGeminiApiKey) {
+                        TextButton(onClick = { viewModel.setGeminiApiKey("") }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+                    } else {
+                        TextButton(onClick = { showKeyInput = true }) { Text("Set key") }
+                    }
+                }
+
+                if (showKeyInput) {
+                    AlertDialog(
+                        onDismissRequest = { showKeyInput = false },
+                        title = { Text("Gemini API Key") },
+                        text = {
+                            Column {
+                                Text("Enter your Google Gemini API key. Get one for free at aistudio.google.com.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(Modifier.height(8.dp))
+                                OutlinedTextField(value = keyInput, onValueChange = { keyInput = it }, label = { Text("API key") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            }
+                        },
+                        confirmButton = { TextButton(onClick = { viewModel.setGeminiApiKey(keyInput); showKeyInput = false; keyInput = "" }) { Text("Save") } },
+                        dismissButton = { TextButton(onClick = { showKeyInput = false; keyInput = "" }) { Text("Cancel") } },
+                    )
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // LLM priority
+                Text("AI priority", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                Spacer(Modifier.height(4.dp))
+                com.riftcompanion.app.data.prefs.LlmPriority.entries.forEach { priority ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { viewModel.setLlmPriority(priority) }.padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = uiState.llmPriority == priority,
+                            onClick = { viewModel.setLlmPriority(priority) },
+                        )
+                        Spacer(Modifier.size(8.dp))
+                        Column {
+                            Text(priority.title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                            Text(
+                                priority.description,
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
             }
 
             // Version

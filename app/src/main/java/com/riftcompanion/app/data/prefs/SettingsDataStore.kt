@@ -11,6 +11,7 @@ import com.riftcompanion.app.ui.theme.AppAccentPalette
 import com.riftcompanion.app.ui.theme.AppAppearance
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,6 +30,8 @@ class SettingsDataStore @Inject constructor(
         val BIOMETRIC_ENABLED_KEY = booleanPreferencesKey("biometric_enabled")
         val SETUP_COMPLETE_KEY = booleanPreferencesKey("setup_complete")
         val DATA_WARNING_ACK_KEY = booleanPreferencesKey("data_warning_acked")
+        val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
+        val LLM_PRIORITY_KEY = stringPreferencesKey("llm_priority")
     }
 
     val settingsFlow: Flow<SettingsData> = context.dataStore.data.map { prefs ->
@@ -40,6 +43,8 @@ class SettingsDataStore @Inject constructor(
             biometricEnabled = prefs[BIOMETRIC_ENABLED_KEY] ?: false,
             setupComplete = prefs[SETUP_COMPLETE_KEY] ?: false,
             dataWarningAcked = prefs[DATA_WARNING_ACK_KEY] ?: false,
+            geminiApiKey = prefs[GEMINI_API_KEY],
+            llmPriority = prefs[LLM_PRIORITY_KEY]?.let { runCatching { LlmPriority.valueOf(it) }.getOrNull() } ?: LlmPriority.CloudFirst,
         )
     }
 
@@ -73,6 +78,18 @@ class SettingsDataStore @Inject constructor(
     suspend fun setDataWarningAcked(value: Boolean) {
         context.dataStore.edit { it[DATA_WARNING_ACK_KEY] = value }
     }
+
+    suspend fun setGeminiApiKey(value: String) {
+        context.dataStore.edit { it[GEMINI_API_KEY] = value.trim() }
+    }
+
+    suspend fun getGeminiApiKey(): String? {
+        return context.dataStore.data.first()[GEMINI_API_KEY]
+    }
+
+    suspend fun setLlmPriority(value: LlmPriority) {
+        context.dataStore.edit { it[LLM_PRIORITY_KEY] = value.name }
+    }
 }
 
 data class SettingsData(
@@ -83,4 +100,11 @@ data class SettingsData(
     val biometricEnabled: Boolean = false,
     val setupComplete: Boolean = false,
     val dataWarningAcked: Boolean = false,
+    val geminiApiKey: String? = null,
+    val llmPriority: LlmPriority = LlmPriority.CloudFirst,
 )
+
+enum class LlmPriority(val title: String, val description: String) {
+    CloudFirst("Cloud first", "On-device AI → Cloud API"),
+    PrivacyFirst("Privacy first", "On-device AI → Cloud API"),
+}
