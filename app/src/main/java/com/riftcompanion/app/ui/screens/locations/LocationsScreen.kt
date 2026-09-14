@@ -94,7 +94,7 @@ fun LocationsScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(onClick = { showCreateDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Create location")
+                Icon(Icons.Default.Add, contentDescription = "Create location", tint = MaterialTheme.colorScheme.onSurface)
             }
         },
     ) { padding ->

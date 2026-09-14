@@ -176,3 +176,18 @@ data class InventoryBulkMoveResponse(
     val updated: Int,
     val failed: Int = 0,
 )
+
+data class InventoryLocationQuantityEdit(
+    val nameSlug: String,
+    val quantitiesByLocation: Map<String, Int>,
+)
+
+data class InventoryQuantityEditResult(
+    val editedCardCount: Int,
+    val bulkUpdateCount: Int,
+    val deletedLineCount: Int,
+    val addedQuantity: Int,
+    val removedQuantity: Int,
+    val movedQuantity: Int,
+    val synchronizationWarning: String? = null,
+)

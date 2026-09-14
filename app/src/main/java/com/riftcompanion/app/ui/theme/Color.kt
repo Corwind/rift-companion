@@ -102,3 +102,23 @@ fun domainColor(domain: String): Color {
         else -> MindBlue
     }
 }
+
+fun parseColor(hex: String): Color? {
+    return runCatching {
+        val normalized = hex.trimStart('#')
+        when (normalized.length) {
+            6 -> Color(
+                red = normalized.substring(0, 2).toInt(16) / 255f,
+                green = normalized.substring(2, 4).toInt(16) / 255f,
+                blue = normalized.substring(4, 6).toInt(16) / 255f,
+            )
+            8 -> Color(
+                red = normalized.substring(0, 2).toInt(16) / 255f,
+                green = normalized.substring(2, 4).toInt(16) / 255f,
+                blue = normalized.substring(4, 6).toInt(16) / 255f,
+                alpha = normalized.substring(6, 8).toInt(16) / 255f,
+            )
+            else -> null
+        }
+    }.getOrNull()
+}

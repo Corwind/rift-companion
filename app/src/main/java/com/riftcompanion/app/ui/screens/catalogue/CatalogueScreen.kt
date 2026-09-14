@@ -27,7 +27,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -113,7 +113,7 @@ fun CatalogueScreen(
                 }
             } else if (uiState.cards.isEmpty()) {
                 EmptyState(
-                    icon = Icons.Default.MenuBook,
+                    icon = Icons.AutoMirrored.Filled.MenuBook,
                     title = if (uiState.searchQuery.isNotBlank()) "No Results" else "No Catalogue",
                     subtitle = if (uiState.searchQuery.isNotBlank()) "No cards match your search."
                     else "Sync from Settings to load the catalogue.",

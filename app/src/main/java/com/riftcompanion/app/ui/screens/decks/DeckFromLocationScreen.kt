@@ -16,7 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
@@ -91,7 +91,7 @@ fun DeckFromLocationScreen(
             IconButton(onClick = {
                 if (step > 1) step-- else onBack()
             }) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
             }
             Text(
                 text = when (step) {
@@ -172,7 +172,7 @@ fun DeckFromLocationScreen(
                     Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator()
                         Spacer(Modifier.size(8.dp))
-                        Text("Analyzing…")
+                        Text("Analyzing…", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 } else if (legendSlug != null) {
                     // Legend was auto-detected from location
@@ -181,7 +181,7 @@ fun DeckFromLocationScreen(
                             CardArtwork(imageURL = legendImageURL, name = legendDisplayName ?: "", modifier = Modifier.width(44.dp).height(62.dp), cornerRadius = 6)
                             Spacer(Modifier.width(12.dp))
                             Column {
-                                Text(legendDisplayName ?: "", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                Text(legendDisplayName ?: "", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                                 Text("Legend (from location)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                             }
                         }
@@ -224,7 +224,7 @@ fun DeckFromLocationScreen(
                                     CardArtwork(imageURL = legend.preferredImageURL, name = legend.identity.displayName, modifier = Modifier.width(36.dp).height(50.dp), cornerRadius = 4)
                                     Spacer(Modifier.width(8.dp))
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(legend.identity.displayName, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(legend.identity.displayName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                         val domains = legend.identity.appVisibleDomains
                                         if (domains.isNotEmpty()) {
                                             Text(domains.joinToString(", "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -259,7 +259,7 @@ fun DeckFromLocationScreen(
                             ) {
                                 CardArtwork(imageURL = champion.imageURL, name = champion.displayName, modifier = Modifier.width(36.dp).height(50.dp), cornerRadius = 4)
                                 Spacer(Modifier.width(8.dp))
-                                Text(champion.displayName, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(champion.displayName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 if (selectedChampion?.nameSlug == champion.nameSlug) {
                                     Icon(Icons.Default.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                                 }
@@ -282,11 +282,11 @@ fun DeckFromLocationScreen(
                         CardArtwork(imageURL = legendImageURL, name = legendDisplayName ?: "", modifier = Modifier.width(44.dp).height(62.dp), cornerRadius = 6)
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text(legendDisplayName ?: "", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Text(legendDisplayName ?: "", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                             Text("Legend", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                             selectedChampion?.let {
                                 Spacer(Modifier.height(4.dp))
-                                Text(it.displayName, style = MaterialTheme.typography.bodyMedium)
+                                Text(it.displayName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                                 Text("Chosen Champion", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                             }
                         }
@@ -313,7 +313,7 @@ fun DeckFromLocationScreen(
                         if (importState.isImporting) {
                             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                             Spacer(Modifier.size(8.dp))
-                            Text("Creating…")
+                            Text("Creating…", color = MaterialTheme.colorScheme.onSurface)
                         } else {
                             Text("Create Deck")
                         }

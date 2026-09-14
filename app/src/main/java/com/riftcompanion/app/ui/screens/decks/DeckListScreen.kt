@@ -331,7 +331,7 @@ private fun CreateDeckFunnel(
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(legend.identity.displayName, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                    Text(legend.identity.displayName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                     val domains = legend.identity.appVisibleDomains
                                     if (domains.isNotEmpty()) {
                                         Text(domains.joinToString(", "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -351,7 +351,7 @@ private fun CreateDeckFunnel(
                         )
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text(selectedLegend!!.identity.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Text(selectedLegend!!.identity.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                             Text("Legend", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                         }
                     }
@@ -382,7 +382,7 @@ private fun CreateDeckFunnel(
                     if (importState.isImporting) {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.width(8.dp))
-                        Text("Creating…")
+                        Text("Creating…", color = MaterialTheme.colorScheme.onSurface)
                     } else {
                         Text("Create Deck")
                     }

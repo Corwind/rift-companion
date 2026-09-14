@@ -8,8 +8,12 @@ import com.riftcompanion.app.data.db.EntityConverter
 import com.riftcompanion.app.data.db.InventoryLineDao
 import com.riftcompanion.app.data.db.InventoryLocationDao
 import com.riftcompanion.app.data.db.LocationPolicyDao
+import com.riftcompanion.app.data.repository.RiftRepository
 import com.riftcompanion.app.domain.model.CardAvailability
 import com.riftcompanion.app.domain.model.CataloguePrintingMetadata
+import com.riftcompanion.app.domain.model.InventoryLocationQuantityEdit
+import com.riftcompanion.app.domain.model.LocationKind
+import com.riftcompanion.app.domain.model.LocationPolicy
 import com.riftcompanion.app.domain.model.LocationQuantity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +39,12 @@ data class CardDetail(
 data class CardDetailUiState(
     val card: CardDetail? = null,
     val isLoading: Boolean = false,
+    val isEditingLocations: Boolean = false,
+    val isSavingLocations: Boolean = false,
+    val locationDrafts: Map<String, Int> = emptyMap(),
+    val saveError: String? = null,
+    val saveSuccess: String? = null,
+    val locationsForEditing: List<LocationPolicy> = emptyList(),
 )
 
 @HiltViewModel
@@ -44,6 +54,7 @@ class CardDetailViewModel @Inject constructor(
     private val inventoryLineDao: InventoryLineDao,
     private val inventoryLocationDao: InventoryLocationDao,
     private val locationPolicyDao: LocationPolicyDao,
+    private val repository: RiftRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CardDetailUiState(isLoading = true))
@@ -102,6 +113,25 @@ class CardDetailViewModel @Inject constructor(
 
             val firstLine = cardLines.firstOrNull()
 
+            // Get editable locations (non-unavailable, non-hidden)
+            val editableLocations = policies
+                .filter { it.kind != LocationKind.Unavailable.storageValue && !it.hidden }
+                .map { e ->
+                    LocationPolicy(
+                        name = e.name,
+                        displayName = e.displayName,
+                        color = e.color,
+                        icon = e.icon,
+                        kind = LocationKind.fromStorageValue(e.kind),
+                        countsAsAvailable = e.countsAsAvailable,
+                        hidden = e.hidden,
+                    )
+                }
+                .sortedWith(
+                    compareByDescending<LocationPolicy> { it.name == "Unlocated" }
+                        .thenBy { it.displayName.lowercase() }
+                )
+
             _uiState.value = CardDetailUiState(
                 card = CardDetail(
                     identity = identity,
@@ -125,7 +155,98 @@ class CardDetailViewModel @Inject constructor(
                     locations = locationQuantities,
                 ),
                 isLoading = false,
+                locationsForEditing = editableLocations,
             )
+        }
+    }
+
+    fun startEditingLocations() {
+        _uiState.value = _uiState.value.copy(
+            isEditingLocations = true,
+            saveError = null,
+            saveSuccess = null,
+        )
+    }
+
+    fun cancelEditingLocations() {
+        _uiState.value = _uiState.value.copy(
+            isEditingLocations = false,
+            locationDrafts = emptyMap(),
+            saveError = null,
+        )
+    }
+
+    fun setDraftQuantity(locationName: String, quantity: Int) {
+        val card = _uiState.value.card ?: return
+        val original = card.locations
+            .filter { it.locationName == locationName }
+            .sumOf { it.quantity }
+        val clamped = maxOf(0, quantity)
+        val newDrafts = _uiState.value.locationDrafts.toMutableMap()
+        if (clamped == original) {
+            newDrafts.remove(locationName)
+        } else {
+            newDrafts[locationName] = clamped
+        }
+        _uiState.value = _uiState.value.copy(locationDrafts = newDrafts)
+    }
+
+    fun getDraftQuantity(locationName: String): Int {
+        val card = _uiState.value.card ?: return 0
+        return _uiState.value.locationDrafts[locationName]
+            ?: card.locations.filter { it.locationName == locationName }.sumOf { it.quantity }
+    }
+
+    val hasLocationEdits: Boolean
+        get() = _uiState.value.locationDrafts.isNotEmpty()
+
+    fun changedLocationCount(): Int = _uiState.value.locationDrafts.size
+
+    fun saveLocationEdits() {
+        val card = _uiState.value.card ?: return
+        if (!hasLocationEdits) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isSavingLocations = true, saveError = null, saveSuccess = null)
+
+            val quantitiesByLocation = mutableMapOf<String, Int>()
+            // Include all current locations
+            for (loc in card.locations) {
+                quantitiesByLocation[loc.locationName] = loc.quantity
+            }
+            // Apply drafts
+            for ((locName, qty) in _uiState.value.locationDrafts) {
+                quantitiesByLocation[locName] = qty
+            }
+
+            val edit = InventoryLocationQuantityEdit(
+                nameSlug = card.identity.nameSlug,
+                quantitiesByLocation = quantitiesByLocation,
+            )
+
+            val result = repository.saveInventoryLocationQuantities(listOf(edit))
+
+            if (result.isSuccess) {
+                val res = result.getOrThrow()
+                val parts = mutableListOf<String>()
+                if (res.addedQuantity > 0) parts.add("added ${res.addedQuantity}")
+                if (res.removedQuantity > 0) parts.add("removed ${res.removedQuantity}")
+                if (res.movedQuantity > 0) parts.add("moved ${res.movedQuantity}")
+                val summary = if (parts.isEmpty()) "updated quantities" else parts.joinToString(", ")
+                _uiState.value = _uiState.value.copy(
+                    isSavingLocations = false,
+                    isEditingLocations = false,
+                    locationDrafts = emptyMap(),
+                    saveSuccess = "Saved: $summary.",
+                )
+                // Reload card to reflect changes
+                loadCard(card.identity.nameSlug, isFromInventory = true)
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isSavingLocations = false,
+                    saveError = "Failed: ${result.exceptionOrNull()?.message ?: "Unknown error"}",
+                )
+            }
         }
     }
 }

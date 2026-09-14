@@ -51,6 +51,7 @@ android {
             buildConfigField("String", "VERSION_NAME", "\"$baseVersion${if (isCi) "" else "-dev"}\"")
         }
         debug {
+            signingConfig = signingConfigs.getByName("release")
             buildConfigField("String", "VERSION_NAME", "\"$baseVersion-debug\"")
         }
         create("dev") {

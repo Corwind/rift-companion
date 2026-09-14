@@ -1133,8 +1133,40 @@ class DeckViewModel @Inject constructor(
             )
         }
 
+        // Re-read deck to pick up state changes (e.g. assembled → planned)
+        val deck = deckDao.getDeck(deckId)
+        val isBuilt = entries.any { it.isBuilt }
+
+        // Recompute legality
+        val entryData = entries.map {
+            DeckEntryData(
+                zone = DeckZone.fromString(it.zone) ?: DeckZone.main,
+                nameSlug = it.nameSlug,
+                quantity = it.quantity,
+            )
+        }
+        val identityInfos = identities.mapValues { (_, entity) ->
+            CardIdentityInfo(
+                nameSlug = entity.nameSlug,
+                displayName = entity.displayName,
+                domains = entity.domainsCsv.split(",").filter { it.isNotBlank() },
+                tags = entity.tagsCsv.split(",").filter { it.isNotBlank() },
+                cardType = entity.cardType,
+                superType = entity.superType,
+            )
+        }
+        val issues = DeckRulesEngine.validate(entryData, identityInfos)
+        val isLegal = issues.none { it.severity == ValidationSeverity.error }
+
         _deckDetailState.value = DeckDetailUiState(
-            deck = current.deck?.copy(cardCount = entries.sumOf { it.quantity }),
+            deck = deck?.let {
+                current.deck?.copy(
+                    cardCount = entries.sumOf { it.quantity },
+                    isBuilt = isBuilt,
+                    isLegal = isLegal,
+                    legalityIssues = issues.filter { it.severity == ValidationSeverity.error }.map { it.message },
+                )
+            },
             entries = display.groupBy { it.zone }.flatMap { (_, items) -> items.sortedBy { it.displayName } },
             isLoading = false,
         )
@@ -1176,6 +1208,21 @@ class DeckViewModel @Inject constructor(
      * Add a card to a deck in the specified zone. If the card already exists
      * in that zone, increases the quantity. Updates UI state incrementally.
      */
+    /**
+     * When a built deck is edited (add/remove/move), revert it to "planned" state
+     * and clear all isBuilt flags since the physical card layout no longer matches.
+     */
+    private suspend fun revertBuiltStateIfNecessary(deckId: String) {
+        val deck = deckDao.getDeck(deckId) ?: return
+        if (deck.state != "assembled") return
+        val entries = deckDao.getEntriesForDeck(deckId)
+        if (entries.any { it.isBuilt }) {
+            deckDao.deleteEntriesForDeck(deckId)
+            deckDao.insertEntries(entries.map { it.copy(isBuilt = false) })
+        }
+        deckDao.insertDeck(deck.copy(state = "planned", updatedAt = System.currentTimeMillis()))
+    }
+
     fun addCardToDeck(deckId: String, nameSlug: String, zone: DeckZone, quantity: Int = 1) {
         viewModelScope.launch {
             val entries = deckDao.getEntriesForDeck(deckId)
@@ -1196,6 +1243,8 @@ class DeckViewModel @Inject constructor(
                     ),
                 ))
             }
+            // If deck was built, revert to planned since cards changed
+            revertBuiltStateIfNecessary(deckId)
             // Update UI state incrementally instead of full reload
             updateDeckDetailIncremental(deckId)
         }
@@ -1236,6 +1285,7 @@ class DeckViewModel @Inject constructor(
 
             deckDao.deleteEntriesForDeck(deckId)
             deckDao.insertEntries(entries)
+            revertBuiltStateIfNecessary(deckId)
             updateDeckDetailIncremental(deckId)
         }
     }
@@ -1260,6 +1310,7 @@ class DeckViewModel @Inject constructor(
                     deckDao.insertEntries(entries.filter { it.id != existing.id })
                 }
             }
+            revertBuiltStateIfNecessary(deckId)
             updateDeckDetailIncremental(deckId)
         }
     }
