@@ -126,9 +126,14 @@ class RulesRag @Inject constructor(
         }.filter { it.score > 0 }
 
         // Split by source and take top results from each
-        val rulesResults = scored.filter { it.source == "rules" }
-            .sortedByDescending { it.score }
-            .take(MAX_RESULTS)
+        // Limit rules context to ~12000 chars to leave room for the response
+        val rulesResults = mutableListOf<Chunk>()
+        var rulesCharCount = 0
+        for (chunk in scored.filter { it.source == "rules" }.sortedByDescending { it.score }) {
+            if (rulesCharCount + chunk.content.length > 12000) break
+            rulesResults.add(chunk)
+            rulesCharCount += chunk.content.length
+        }
 
         val cardResults = scored.filter { it.source == "cards" }
             .sortedByDescending { it.score }
