@@ -1,6 +1,7 @@
 package com.riftcompanion.app.ui.screens.locations
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -70,7 +71,6 @@ import com.riftcompanion.app.ui.viewmodel.LocationsViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocationsScreen(
-    onMenuClick: () -> Unit = {},
     onLocationClick: (String) -> Unit = {},
     viewModel: LocationsViewModel = hiltViewModel(),
 ) {
@@ -88,30 +88,18 @@ fun LocationsScreen(
     }
 
     Scaffold(
-        modifier = Modifier.gradientBackground(),
+        
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
-        topBar = {
-            TopAppBar(
-                title = { Text("Locations") },
-                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
-                    containerColor = androidx.compose.ui.graphics.Color.Transparent,
-                ),
-                navigationIcon = {
-                    IconButton(onClick = onMenuClick) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menu")
-                    }
-                },
-            )
-        },
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0,0,0,0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(onClick = { showCreateDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Create location")
+                Icon(Icons.Default.Add, contentDescription = "Create location", tint = MaterialTheme.colorScheme.onSurface)
             }
         },
     ) { padding ->
         if (uiState.isLoading) {
-            Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(Modifier.padding(padding).statusBarsPadding().fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
         } else if (uiState.locations.isEmpty()) {
@@ -134,7 +122,7 @@ fun LocationsScreen(
         } else {
             LazyColumn(
                 modifier = Modifier.padding(padding),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 100.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 // Summary with icon+count chips
@@ -157,9 +145,9 @@ fun LocationsScreen(
                 items(uiState.locations, key = { it.id }) { location ->
                     LocationRow(
                         location = location,
-                        cardCount = uiState.cardCountsByLocation[location.normalizedName] ?: 0,
-                        onClick = { onLocationClick(location.normalizedName) },
-                        onEdit = { viewModel.startEdit(location, uiState.cardCountsByLocation[location.normalizedName] ?: 0) },
+                        cardCount = uiState.cardCountsByLocation[location.name] ?: 0,
+                        onClick = { onLocationClick(location.name) },
+                        onEdit = { viewModel.startEdit(location, uiState.cardCountsByLocation[location.name] ?: 0) },
                         onToggleHidden = { viewModel.toggleHidden(location) },
                     )
                 }

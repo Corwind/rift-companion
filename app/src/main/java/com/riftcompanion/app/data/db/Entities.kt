@@ -59,7 +59,7 @@ data class InventoryLineEntity(
 
 @Entity(tableName = "inventory_locations")
 data class InventoryLocationEntity(
-    @PrimaryKey val normalizedName: String,
+    @PrimaryKey val name: String,
     val displayName: String,
     val color: String?,
     val icon: String?,
@@ -69,13 +69,14 @@ data class InventoryLocationEntity(
 
 @Entity(tableName = "location_policies")
 data class LocationPolicyEntity(
-    @PrimaryKey val normalizedName: String,
+    @PrimaryKey val name: String,
     val displayName: String,
     val color: String?,
     val icon: String?,
     val kind: String,          // storage | deck | unavailable
     val countsAsAvailable: Boolean,
     val hidden: Boolean,
+    val linkedDeckId: String? = null,  // if kind == "deck", which deck this location belongs to
 )
 
 // ── Sync metadata ──────────────────────────────────────────────────────

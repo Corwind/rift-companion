@@ -1,6 +1,7 @@
 package com.riftcompanion.app.ui.screens.inventory
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,21 +27,27 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Inventory2
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Button
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -50,6 +57,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -61,12 +69,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.riftcompanion.app.domain.model.InventoryCardSummary
+import com.riftcompanion.app.domain.model.LocationKind
 import com.riftcompanion.app.domain.model.LocationPolicy
 import com.riftcompanion.app.ui.components.CardArtwork
 import com.riftcompanion.app.ui.components.DomainTag
@@ -74,13 +85,13 @@ import com.riftcompanion.app.ui.components.QuantityBadge
 import com.riftcompanion.app.ui.components.ThemedCardSurface
 import com.riftcompanion.app.ui.components.gradientBackground
 import com.riftcompanion.app.ui.viewmodel.CardViewMode
+import com.riftcompanion.app.ui.viewmodel.InventoryQuantityDraftKey
 import com.riftcompanion.app.ui.viewmodel.InventoryViewModel
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun InventoryScreen(
     onCardClick: (String, Boolean) -> Unit,
-    onMenuClick: () -> Unit = {},
     initialLocationFilter: String? = null,
     viewModel: InventoryViewModel = hiltViewModel(),
 ) {
@@ -89,39 +100,98 @@ fun InventoryScreen(
 
     var showFilterSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showDiscardDialog by remember { mutableStateOf(false) }
 
     // Apply initial location filter when navigated from Locations screen
     androidx.compose.runtime.LaunchedEffect(initialLocationFilter) {
         initialLocationFilter?.let { viewModel.setSelectedLocation(it) }
     }
 
+    // Show save success/error as snackbar-like
+    androidx.compose.runtime.LaunchedEffect(uiState.saveSuccess) {
+        uiState.saveSuccess?.let {
+            // Auto-clear after showing
+        }
+    }
+
     Scaffold(
-        modifier = Modifier.gradientBackground(),
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
-        topBar = {
-            TopAppBar(
-                title = { Text("Inventory (${uiState.filteredCount})") },
-                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
-                    containerColor = androidx.compose.ui.graphics.Color.Transparent,
-                ),
-                navigationIcon = {
-                    IconButton(onClick = onMenuClick) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menu")
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0,0,0,0),
+    ) { padding ->
+        Column(modifier = Modifier.padding(padding).statusBarsPadding()) {
+            if (uiState.isEditing) {
+                // Edit mode: search bar + Cancel + Save on one row
+                EditModeHeader(
+                    searchQuery = uiState.searchQuery,
+                    onSearchQueryChange = { viewModel.setSearchQuery(it) },
+                    filteredCount = uiState.filteredCount,
+                    drafts = viewModel.drafts.collectAsStateWithLifecycle(),
+                    isSaving = uiState.isSaving,
+                    onSave = { viewModel.saveChanges() },
+                    onCancel = {
+                        if (viewModel.hasChanges) {
+                            showDiscardDialog = true
+                        } else {
+                            viewModel.cancelEditing()
+                        }
+                    },
+                )
+                // Save error inline
+                uiState.saveError?.let { errorMsg ->
+                    Text(
+                        text = errorMsg,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                }
+                if (uiState.isLoading) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
                     }
-                },
-                actions = {
-                    SingleChoiceSegmentedButtonRow {
-                        SegmentedButton(
-                            selected = uiState.viewMode == CardViewMode.LIST,
-                            onClick = { viewModel.setViewMode(CardViewMode.LIST) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                            label = { Icon(Icons.Default.List, contentDescription = "List") },
+                } else if (uiState.cards.isEmpty()) {
+                    EmptyState(
+                        icon = Icons.Default.Inventory2,
+                        title = "No Cards",
+                        subtitle = "Sync from Settings to load your cards.",
+                    )
+                } else {
+                    InventoryEditModeContent(
+                        cards = uiState.cards,
+                        locations = uiState.locations,
+                        viewModel = viewModel,
+                    )
+                }
+            } else {
+                // Normal mode: search bar + filters + grid/list
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    OutlinedTextField(
+                        value = uiState.searchQuery,
+                        onValueChange = { viewModel.setSearchQuery(it) },
+                        placeholder = { Text("${uiState.filteredCount} cards", style = MaterialTheme.typography.labelMedium) },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        textStyle = MaterialTheme.typography.labelMedium,
+                    )
+                    IconButton(onClick = {
+                        viewModel.setViewMode(
+                            if (uiState.viewMode == CardViewMode.GRID) CardViewMode.LIST else CardViewMode.GRID
                         )
-                        SegmentedButton(
-                            selected = uiState.viewMode == CardViewMode.GRID,
-                            onClick = { viewModel.setViewMode(CardViewMode.GRID) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                            label = { Icon(Icons.Default.GridView, contentDescription = "Grid") },
+                    }) {
+                        Icon(
+                            if (uiState.viewMode == CardViewMode.GRID) Icons.AutoMirrored.Filled.List else Icons.Default.GridView,
+                            contentDescription = if (uiState.viewMode == CardViewMode.GRID) "List view" else "Grid view",
+                            tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                     IconButton(onClick = { showFilterSheet = true }) {
@@ -133,79 +203,75 @@ fun InventoryScreen(
                             else MaterialTheme.colorScheme.onSurface,
                         )
                     }
-                },
-            )
-        },
-    ) { padding ->
-        Column(modifier = Modifier.padding(padding)) {
-            OutlinedTextField(
-                value = uiState.searchQuery,
-                onValueChange = { viewModel.setSearchQuery(it) },
-                placeholder = { Text("Search…") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                singleLine = true,
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
-            )
-
-            if (uiState.selectedLocation != null || uiState.domainFilters.isNotEmpty()) {
-                FlowRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    uiState.selectedLocation?.let { locName ->
-                        val loc = uiState.locations.firstOrNull { it.normalizedName == locName }
-                        FilterChip(
-                            selected = true,
-                            onClick = { viewModel.setSelectedLocation(null) },
-                            label = { Text(loc?.displayName ?: locName) },
-                        )
-                    }
-                    uiState.domainFilters.forEach { domain ->
-                        FilterChip(
-                            selected = true,
-                            onClick = { viewModel.toggleDomainFilter(domain) },
-                            label = { Text(domain) },
+                    IconButton(
+                        onClick = { viewModel.startEditing() },
+                        enabled = uiState.cards.isNotEmpty() && !uiState.isSaving,
+                    ) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Edit inventory",
+                            tint = if (uiState.cards.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
-                Spacer(Modifier.height(4.dp))
-            }
 
-            if (uiState.isLoading) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else if (uiState.cards.isEmpty()) {
-                EmptyState(
-                    icon = Icons.Default.Inventory2,
-                    title = if (uiState.searchQuery.isNotBlank()) "No Results" else "No Inventory",
-                    subtitle = if (uiState.searchQuery.isNotBlank()) "No cards match your search."
-                    else "Sync from Settings to load your cards.",
-                )
-            } else if (uiState.viewMode == CardViewMode.GRID) {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 160.dp),
-                    contentPadding = PaddingValues(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    items(uiState.cards, key = { it.id }) { card ->
-                        InventoryGridCard(card = card, onClick = { onCardClick(card.id, true) })
+                if (uiState.selectedLocation != null || uiState.domainFilters.isNotEmpty()) {
+                    FlowRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        uiState.selectedLocation?.let { locName ->
+                            val loc = uiState.locations.firstOrNull { it.name == locName }
+                            FilterChip(
+                                selected = true,
+                                onClick = { viewModel.setSelectedLocation(null) },
+                                label = { Text(loc?.displayName ?: locName) },
+                            )
+                        }
+                        uiState.domainFilters.forEach { domain ->
+                            FilterChip(
+                                selected = true,
+                                onClick = { viewModel.toggleDomainFilter(domain) },
+                                label = { Text(domain) },
+                            )
+                        }
                     }
+                    Spacer(Modifier.height(4.dp))
                 }
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(uiState.cards, key = { it.id }) { card ->
-                        InventoryListRow(card = card, onClick = { onCardClick(card.id, true) })
+
+                if (uiState.isLoading) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else if (uiState.cards.isEmpty()) {
+                    EmptyState(
+                        icon = Icons.Default.Inventory2,
+                        title = if (uiState.searchQuery.isNotBlank()) "No Results" else "No Inventory",
+                        subtitle = if (uiState.searchQuery.isNotBlank()) "No cards match your search."
+                        else "Sync from Settings to load your cards.",
+                    )
+                } else if (uiState.viewMode == CardViewMode.GRID) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 160.dp),
+                        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 100.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        items(uiState.cards, key = { it.id }) { card ->
+                            InventoryGridCard(card = card, onClick = { onCardClick(card.id, true) })
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 100.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(uiState.cards, key = { it.id }) { card ->
+                            InventoryListRow(card = card, onClick = { onCardClick(card.id, true) })
+                        }
                     }
                 }
             }
@@ -217,6 +283,7 @@ fun InventoryScreen(
             onDismissRequest = { showFilterSheet = false },
             sheetState = sheetState,
             containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            dragHandle = null,
         ) {
             FilterSheetContent(
                 locations = uiState.locations,
@@ -233,6 +300,423 @@ fun InventoryScreen(
                 },
                 onApply = { showFilterSheet = false },
             )
+        }
+    }
+
+    if (showDiscardDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardDialog = false },
+            title = { Text("Discard inventory changes?") },
+            text = { Text("Your unsaved location quantities will be lost. CardNexus has not been changed.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDiscardDialog = false
+                    viewModel.cancelEditing()
+                }) { Text("Discard Changes", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardDialog = false }) { Text("Keep Editing") }
+            },
+        )
+    }
+}
+
+@Composable
+private fun EditModeHeader(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    filteredCount: Int,
+    drafts: androidx.compose.runtime.State<Map<InventoryQuantityDraftKey, Int>>,
+    isSaving: Boolean,
+    onSave: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val changedCount = remember(drafts.value) {
+        drafts.value.keys.map { it.cardID }.toSet().size
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onSearchQueryChange,
+            placeholder = { Text("$filteredCount cards", style = MaterialTheme.typography.labelMedium) },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+            singleLine = true,
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier
+                .weight(1f)
+                .height(48.dp),
+            textStyle = MaterialTheme.typography.labelMedium,
+        )
+        if (changedCount > 0) {
+            Text(
+                text = "$changedCount",
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.semantics { contentDescription = "$changedCount cards have changes" },
+            )
+        }
+        if (isSaving) {
+            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+        }
+        TextButton(onClick = onCancel, enabled = !isSaving) {
+            Text("Cancel")
+        }
+        androidx.compose.material3.Button(
+            onClick = onSave,
+            enabled = changedCount > 0 && !isSaving,
+        ) {
+            Text("Save")
+        }
+    }
+}
+
+@Composable
+private fun InventoryEditModeContent(
+    cards: List<InventoryCardSummary>,
+    locations: List<LocationPolicy>,
+    viewModel: InventoryViewModel,
+) {
+    LazyColumn(
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 100.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        items(cards, key = { it.id }) { card ->
+            InventoryCardEditor(
+                card = card,
+                locations = locations,
+                viewModel = viewModel,
+            )
+        }
+    }
+}
+
+@Composable
+private fun InventoryCardEditor(
+    card: InventoryCardSummary,
+    locations: List<LocationPolicy>,
+    viewModel: InventoryViewModel,
+) {
+    val drafts by viewModel.drafts.collectAsStateWithLifecycle()
+
+    // Only show locations where the card already has copies, or where the user has added a draft
+    val cardLocationNames = card.locations.map { it.locationName }.toSet()
+    val draftLocationsForCard = drafts.keys
+        .filter { it.cardID == card.id }
+        .map { it.locationKey }
+        .toSet()
+    val visibleLocationNames = cardLocationNames + draftLocationsForCard
+
+    val allEditableLocations = locations.filter { it.kind != LocationKind.Unavailable }
+        .sortedWith(
+            compareByDescending<LocationPolicy> { it.name == "Unlocated" }
+                .thenBy { it.displayName.lowercase() }
+        )
+
+    val visibleLocations = allEditableLocations.filter { it.name in visibleLocationNames }
+    val addableLocations = allEditableLocations.filter { it.name !in visibleLocationNames }
+
+    val hasChanges = visibleLocations.any { location ->
+        val original = card.locations.filter { it.locationName == location.name }.sumOf { it.quantity }
+        val draft = drafts[InventoryQuantityDraftKey(card.id, location.name)] ?: original
+        draft != original
+    }
+
+    var showAddLocationDialog by remember { mutableStateOf(false) }
+
+    ThemedCardSurface(cornerRadius = 12) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            // Card header - compact, single line
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CardArtwork(
+                    imageURL = card.preferredImageURL,
+                    name = card.identity.displayName,
+                    modifier = Modifier.width(32.dp).height(44.dp),
+                    cornerRadius = 5,
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = card.identity.displayName,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = if (hasChanges) FontWeight.Bold else FontWeight.Medium
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (hasChanges) {
+                    Text(
+                        text = "\u2022",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+
+            // Only show locations where the card already has copies (or drafts)
+            visibleLocations.forEachIndexed { index, location ->
+                val originalQty = card.locations
+                    .filter { it.locationName == location.name }
+                    .sumOf { it.quantity }
+                val draftQty = drafts[InventoryQuantityDraftKey(card.id, location.name)] ?: originalQty
+                val isReadOnly = location.name == "Unlocated"
+                val isNewLocation = originalQty == 0 && !isReadOnly
+
+                LocationQuantityControl(
+                    locationName = location.displayName,
+                    locationKind = location.kind,
+                    color = location.color,
+                    quantity = draftQty,
+                    originalQuantity = originalQty,
+                    isReadOnly = isReadOnly,
+                    isNewLocation = isNewLocation,
+                    onDecrement = { viewModel.setDraftQuantity(card.id, location.name, draftQty - 1) },
+                    onIncrement = { viewModel.setDraftQuantity(card.id, location.name, draftQty + 1) },
+                )
+                if (index < visibleLocations.lastIndex) Spacer(Modifier.height(4.dp))
+            }
+
+            // Add to location button
+            if (addableLocations.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { showAddLocationDialog = true }
+                        .padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = "Add to location",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
+    }
+
+    if (showAddLocationDialog) {
+        AddLocationDialog(
+            cardName = card.identity.displayName,
+            availableLocations = addableLocations,
+            onDismiss = { showAddLocationDialog = false },
+            onConfirm = { locationName, quantity ->
+                viewModel.setDraftQuantity(card.id, locationName, quantity)
+                showAddLocationDialog = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun AddLocationDialog(
+    cardName: String,
+    availableLocations: List<LocationPolicy>,
+    onDismiss: () -> Unit,
+    onConfirm: (locationName: String, quantity: Int) -> Unit,
+) {
+    var selectedLocation by remember { mutableStateOf(availableLocations.firstOrNull()) }
+    var quantityText by remember { mutableStateOf("1") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add to location") },
+        text = {
+            Column {
+                Text(
+                    text = cardName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+
+                // Location selector
+                Text(
+                    text = "Location",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(4.dp))
+                availableLocations.forEach { location ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                if (selectedLocation == location)
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                            )
+                            .clickable { selectedLocation = location }
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                            .semantics {
+                                contentDescription = if (selectedLocation == location)
+                                    "${location.displayName}, selected" else location.displayName
+                            },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    location.color?.let { com.riftcompanion.app.ui.theme.parseColor(it) }
+                                        ?: MaterialTheme.colorScheme.outline
+                                ),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = location.displayName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (selectedLocation == location) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // Quantity input
+                Text(
+                    text = "Quantity",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = quantityText,
+                    onValueChange = { value ->
+                        quantityText = value.filter { it.isDigit() }.take(3)
+                    },
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.Button(
+                onClick = {
+                    val qty = quantityText.toIntOrNull() ?: 0
+                    if (qty > 0 && selectedLocation != null) {
+                        onConfirm(selectedLocation!!.name, qty)
+                    }
+                },
+                enabled = selectedLocation != null && (quantityText.toIntOrNull() ?: 0) > 0,
+            ) { Text("Add") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+@Composable
+private fun LocationQuantityControl(
+    locationName: String,
+    locationKind: LocationKind,
+    color: String?,
+    quantity: Int,
+    originalQuantity: Int,
+    isReadOnly: Boolean,
+    isNewLocation: Boolean,
+    onDecrement: () -> Unit,
+    onIncrement: () -> Unit,
+) {
+    val locationColor = color?.let { com.riftcompanion.app.ui.theme.parseColor(it) } ?: MaterialTheme.colorScheme.outline
+    val icon = when (locationKind) {
+        LocationKind.Storage -> Icons.Default.Inventory2
+        LocationKind.Deck -> Icons.Default.Menu
+        LocationKind.Unavailable -> Icons.Default.Block
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                if (isNewLocation) MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            )
+            .padding(horizontal = 10.dp, vertical = 4.dp)
+            .semantics { contentDescription = "$locationName: $quantity copies" },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .clip(CircleShape)
+                .background(locationColor),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = locationName,
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (isNewLocation) {
+            Text(
+                text = "new",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                    .semantics { contentDescription = "New location for this card" },
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+        // Minus button
+        IconButton(
+            onClick = onDecrement,
+            enabled = quantity > 0 && !isReadOnly,
+            modifier = Modifier.semantics { contentDescription = "Remove one from $locationName" },
+        ) {
+            Icon(Icons.Default.Remove, contentDescription = null, modifier = Modifier.size(16.dp))
+        }
+        // Quantity
+        Text(
+            text = "$quantity",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            modifier = Modifier.width(28.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        // Plus button
+        IconButton(
+            onClick = onIncrement,
+            enabled = !isReadOnly,
+            modifier = Modifier.semantics { contentDescription = "Add one to $locationName" },
+        ) {
+            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
         }
     }
 }
@@ -286,11 +770,11 @@ private fun FilterSheetContent(
 ) {
     Column(
         modifier = Modifier
-            .fillMaxWidth()
+            .fillMaxSize()
             .gradientBackground()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
-            .padding(bottom = 32.dp),
+            .padding(top = 48.dp, bottom = 32.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -298,13 +782,21 @@ private fun FilterSheetContent(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Filters", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
-            if (selectedLocation != null || selectedDomains.isNotEmpty()) {
-                Text(
-                    text = "Clear all",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable { onClearAll() },
-                )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (selectedLocation != null || selectedDomains.isNotEmpty()) {
+                    Text(
+                        text = "Clear all",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable { onClearAll() },
+                    )
+                }
+                IconButton(onClick = onApply) {
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurface)
+                }
             }
         }
 
@@ -326,10 +818,10 @@ private fun FilterSheetContent(
                 label = { Text("All Locations ($totalCardCount)") },
             )
             locations.forEach { location ->
-                val count = cardCountsByLocation[location.normalizedName] ?: 0
+                val count = cardCountsByLocation[location.name] ?: 0
                 FilterChip(
-                    selected = selectedLocation == location.normalizedName,
-                    onClick = { onLocationSelected(location.normalizedName) },
+                    selected = selectedLocation == location.name,
+                    onClick = { onLocationSelected(location.name) },
                     label = { Text("${location.displayName} ($count)") },
                 )
             }
@@ -361,7 +853,7 @@ private fun FilterSheetContent(
 
         Spacer(Modifier.height(24.dp))
 
-        Button(
+        androidx.compose.material3.Button(
             onClick = onApply,
             modifier = Modifier.fillMaxWidth(),
         ) {

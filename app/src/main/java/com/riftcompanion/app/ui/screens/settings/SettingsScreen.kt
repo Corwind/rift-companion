@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -42,6 +44,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
@@ -76,38 +79,22 @@ import com.riftcompanion.app.ui.viewmodel.SettingsViewModel
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
-    onMenuClick: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val themeState = currentThemeState()
-    val snackbarHostState = remember { SnackbarHostState() }
 
     var showApiKeyField by remember { mutableStateOf(false) }
     var apiKey by remember { mutableStateOf("") }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    LaunchedEffect(uiState.syncMessage) {
-        uiState.syncMessage?.let { snackbarHostState.showSnackbar(it); viewModel.clearSyncMessage() }
-    }
-    LaunchedEffect(uiState.syncError) {
-        uiState.syncError?.let { snackbarHostState.showSnackbar("Error: $it"); viewModel.clearSyncMessage() }
-    }
-
     Scaffold(
-        modifier = Modifier.gradientBackground(),
+
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
-        topBar = {
-            TopAppBar(
-                title = { Text("Settings") },
-                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
-                navigationIcon = { IconButton(onClick = onMenuClick) { Icon(Icons.Default.Menu, contentDescription = "Menu") } },
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0,0,0,0),
     ) { padding ->
         Column(
-            modifier = Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
+            modifier = Modifier.padding(padding).statusBarsPadding().fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             // Appearance
@@ -247,7 +234,7 @@ private fun ColorSwatchChip(label: String, color: Color, selected: Boolean, onCl
     val borderColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
     val borderWidth = if (selected) 2.dp else 1.dp
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.clip(RoundedCornerShape(50)).border(borderWidth, borderColor, RoundedCornerShape(50)).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp)) {
-        Box(modifier = Modifier.size(16.dp).clip(CircleShape).background(color).border(1.dp, Color.Black.copy(alpha = if (isSingleColor) 0.3f else 0.15f), CircleShape))
+        Box(modifier = Modifier.size(16.dp).clip(CircleShape).background(color).border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = if (isSingleColor) 0.3f else 0.15f), CircleShape))
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
     }
 }

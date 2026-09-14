@@ -51,6 +51,7 @@ android {
             buildConfigField("String", "VERSION_NAME", "\"$baseVersion${if (isCi) "" else "-dev"}\"")
         }
         debug {
+            signingConfig = signingConfigs.getByName("release")
             buildConfigField("String", "VERSION_NAME", "\"$baseVersion-debug\"")
         }
         create("dev") {
@@ -130,6 +131,8 @@ dependencies {
     // Security
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.security.crypto)
+    implementation(libs.haze)
+    implementation(libs.haze.materials)
 
     // Test
     testImplementation(libs.junit)

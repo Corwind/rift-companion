@@ -2,6 +2,8 @@ package com.riftcompanion.app.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import coil3.ImageLoader
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
@@ -9,6 +11,7 @@ import coil3.request.crossfade
 import com.riftcompanion.app.data.api.CardNexusClient
 import com.riftcompanion.app.data.db.CardIdentityDao
 import com.riftcompanion.app.data.db.CardPrintingDao
+import com.riftcompanion.app.data.db.DeckDao
 import com.riftcompanion.app.data.db.InventoryLineDao
 import com.riftcompanion.app.data.db.InventoryLocationDao
 import com.riftcompanion.app.data.db.LocationPolicyDao
@@ -32,6 +35,54 @@ import okio.Path.Companion.toOkioPath
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
+    // Migration from v1 → v2: add deck tables and linkedDeckId column
+    val MIGRATION_1_2 = object : Migration(1, 2) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS decks (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    rulesetId TEXT NOT NULL,
+                    createdAt INTEGER NOT NULL,
+                    updatedAt INTEGER NOT NULL,
+                    linkedLocationName TEXT
+                )
+            """.trimIndent())
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS deck_entries (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    deckId TEXT NOT NULL,
+                    zone TEXT NOT NULL,
+                    nameSlug TEXT NOT NULL,
+                    quantity INTEGER NOT NULL,
+                    preferredProductId INTEGER,
+                    preferredFinish TEXT,
+                    preferredLanguage TEXT,
+                    sourceLocationName TEXT,
+                    sourceLineId TEXT,
+                    isBuilt INTEGER NOT NULL DEFAULT 0
+                )
+            """.trimIndent())
+            db.execSQL("ALTER TABLE location_policies ADD COLUMN linkedDeckId TEXT")
+        }
+    }
+
+    // Migration from v2 → v3: add linkedDeckId column to location_policies
+    val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE location_policies ADD COLUMN linkedDeckId TEXT")
+        }
+    }
+
+    // Migration from v3 → v4: rename normalizedName PK to name (use exact API name as identity)
+    val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE inventory_locations RENAME COLUMN normalizedName TO name")
+            db.execSQL("ALTER TABLE location_policies RENAME COLUMN normalizedName TO name")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): RiftDatabase {
@@ -40,6 +91,7 @@ object AppModule {
             RiftDatabase::class.java,
             "rift_companion.db",
         )
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -50,6 +102,7 @@ object AppModule {
     @Provides fun provideInventoryLocationDao(db: RiftDatabase): InventoryLocationDao = db.inventoryLocationDao()
     @Provides fun provideLocationPolicyDao(db: RiftDatabase): LocationPolicyDao = db.locationPolicyDao()
     @Provides fun provideSyncMetadataDao(db: RiftDatabase): SyncMetadataDao = db.syncMetadataDao()
+    @Provides fun provideDeckDao(db: RiftDatabase): DeckDao = db.deckDao()
 
     @Provides
     @Singleton
