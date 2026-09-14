@@ -27,6 +27,7 @@ turbine = "1.2.0"
 coroutinesTest = "1.9.0"
 robolectric = "4.14.1"
 haze = "1.6.10"
+mlkitGenai = "1.0.0-beta2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -72,6 +73,8 @@ androidx-security-crypto = { group = "androidx.security", name = "security-crypt
 
 haze = { group = "dev.chrisbanes.haze", name = "haze", version.ref = "haze" }
 haze-materials = { group = "dev.chrisbanes.haze", name = "haze-materials", version.ref = "haze" }
+
+mlkit-genai-prompt = { group = "com.google.mlkit", name = "genai-prompt", version.ref = "mlkitGenai" }
 
 # Test
 junit = { group = "junit", name = "junit", version.ref = "junit" }

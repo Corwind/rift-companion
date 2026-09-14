@@ -133,6 +133,7 @@ dependencies {
     implementation(libs.androidx.security.crypto)
     implementation(libs.haze)
     implementation(libs.haze.materials)
+    implementation(libs.mlkit.genai.prompt)
 
     // Test
     testImplementation(libs.junit)
