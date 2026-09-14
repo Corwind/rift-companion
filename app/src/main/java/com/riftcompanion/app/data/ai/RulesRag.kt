@@ -64,17 +64,29 @@ class RulesRag @Inject constructor(
                 }
             }
 
-            // Index card catalog
+            // Index card catalog — include ALL cards, not just those with rulesText
             val cards = cardIdentityDao.getAllCards()
             Log.i(TAG, "Indexing ${cards.size} cards")
             for (card in cards) {
                 val rulesText = extractRulesText(card.attributesJson)
-                if (rulesText.isNotBlank()) {
-                    val domains = card.domainsCsv.split(",").filter { it.isNotBlank() }
-                    val domainStr = if (domains.isNotEmpty()) domains.joinToString("/") else "Universal"
-                    val content = "${card.displayName} (${card.cardType ?: "Unknown"}, $domainStr): $rulesText"
-                    allChunks.add(Chunk("cards", card.displayName, content))
+                val tags = extractTags(card.tagsCsv)
+                val domains = card.domainsCsv.split(",").filter { it.isNotBlank() }
+                val domainStr = if (domains.isNotEmpty()) domains.joinToString("/") else "Universal"
+                // Include name, type, domains, tags, and rules text for best matching
+                val content = buildString {
+                    append(card.displayName)
+                    append(" (")
+                    append(card.cardType ?: "Unknown")
+                    append(", ")
+                    append(domainStr)
+                    if (tags.isNotEmpty()) {
+                        append(", ")
+                        append(tags.joinToString(", "))
+                    }
+                    append("): ")
+                    append(rulesText)
                 }
+                allChunks.add(Chunk("cards", card.displayName, content))
             }
 
             chunks = allChunks
@@ -100,12 +112,17 @@ class RulesRag @Inject constructor(
      */
     suspend fun retrieve(query: String): String {
         if (!initialized) initialize()
-        if (chunks.isEmpty()) return ""
+        if (chunks.isEmpty()) {
+            Log.w(TAG, "No chunks in RAG index")
+            return ""
+        }
 
         val queryTerms = tokenize(query)
+        Log.d(TAG, "Retrieving for query: '$query' — terms: $queryTerms")
         if (queryTerms.isEmpty()) return ""
 
         // Score all chunks
+        val queryLower = query.lowercase().trim()
         val scored = chunks.map { chunk ->
             val docTerms = tokenize(chunk.content)
             val docLength = docTerms.size
@@ -122,6 +139,12 @@ class RulesRag @Inject constructor(
                 val tfNorm = (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * docLength / avgDocLength))
                 score += idf * tfNorm
             }
+
+            // Boost: if the query contains the chunk title (card name), boost significantly
+            if (chunk.source == "cards" && queryLower.contains(chunk.title.lowercase())) {
+                score += 10.0
+            }
+
             chunk.copy(score = score.toFloat())
         }.filter { it.score > 0 }
 
@@ -138,6 +161,10 @@ class RulesRag @Inject constructor(
         val cardResults = scored.filter { it.source == "cards" }
             .sortedByDescending { it.score }
             .take(MAX_CARD_RESULTS)
+
+        Log.d(TAG, "Retrieved: ${rulesResults.size} rules chunks, ${cardResults.size} card chunks")
+        if (rulesResults.isNotEmpty()) Log.d(TAG, "Top rule: ${rulesResults.first().title} (score=${rulesResults.first().score})")
+        if (cardResults.isNotEmpty()) Log.d(TAG, "Top card: ${cardResults.first().title} (score=${cardResults.first().score})")
 
         // Build context string
         return buildString {
@@ -162,7 +189,7 @@ class RulesRag @Inject constructor(
         return text.lowercase()
             .replace(Regex("[^a-z0-9\\s]"), " ")
             .split(Regex("\\s+"))
-            .filter { it.length > 2 }
+            .filter { it.length > 1 }  // Allow 2+ char terms for short card names
     }
 
     private fun buildSectionText(blocks: List<com.riftcompanion.app.domain.model.RuleBlock>): String {
@@ -184,6 +211,10 @@ class RulesRag @Inject constructor(
                 }
             }
         }.trim()
+    }
+
+    private fun extractTags(tagsCsv: String): List<String> {
+        return tagsCsv.split(",").map { it.trim() }.filter { it.isNotBlank() }
     }
 
     private fun extractRulesText(attributesJson: String): String {

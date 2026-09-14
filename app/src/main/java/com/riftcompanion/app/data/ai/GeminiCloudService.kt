@@ -168,6 +168,7 @@ class GeminiCloudService @Inject constructor(
         }
 
         // Try each candidate model until one works
+        // On rate limits (429) or server errors (503), stop trying — don't waste quota
         for (model in models) {
             val request = Request.Builder()
                 .url("${BASE_URL}models/$model:generateContent?key=$apiKey")
@@ -179,7 +180,13 @@ class GeminiCloudService @Inject constructor(
                 Log.d(TAG, "Gemini API response: ${response.code} (model: $model)")
                 if (!response.isSuccessful) {
                     val errorBody = response.body?.string()
-                    Log.w(TAG, "Model $model failed: ${response.code} - ${errorBody?.take(200)}")
+                    val errorCode = response.code
+                    Log.w(TAG, "Model $model failed: $errorCode - ${errorBody?.take(200)}")
+                    response.close()
+                    // On 429 (rate limit) or 503 (overloaded), don't try more models — just fail
+                    if (errorCode == 429 || errorCode == 503) {
+                        return@withContext null
+                    }
                     return@runCatching null
                 }
                 val body = response.body?.string() ?: return@runCatching null
