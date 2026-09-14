@@ -42,6 +42,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Unarchive
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -147,14 +148,10 @@ fun DeckDetailScreen(
 
     val zonesWithCards = detailState.entries.map { it.zone }.toSet()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding(),
-    ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
             .gradientBackground(),
     ) {
         // Header
@@ -222,7 +219,7 @@ fun DeckDetailScreen(
         } else {
             val deck = detailState.deck
             if (deck != null) {
-                LegalityBanner(deck.isLegal, deck.isBuilt, deck.legalityIssues)
+                LegalityBanner(deck.isLegal, deck.isBuilt, deck.legalityIssues, deck.banlistWarnings)
             }
 
             // Edit mode indicator
@@ -391,7 +388,6 @@ fun DeckDetailScreen(
             position = dragPositionInRoot,
         )
     }
-    } // close Box
 
     // Build preview dialog
     if (showBuildPreview) {
@@ -819,35 +815,59 @@ private fun DeckCardGrid(
 }
 
 @Composable
-private fun LegalityBanner(isLegal: Boolean, isBuilt: Boolean, issues: List<String>) {
-    if (isBuilt) return // Built status is shown in the top bar
+private fun LegalityBanner(isLegal: Boolean, isBuilt: Boolean, issues: List<String>, banlistWarnings: List<String>) {
+    if (isBuilt) return
     var showAllIssues by remember { mutableStateOf(false) }
-    val (color, icon, text) = if (isLegal) {
-        Triple(com.riftcompanion.app.ui.theme.freeColor(), Icons.Default.CheckCircle, "Legal — ready to build")
-    } else {
-        Triple(MaterialTheme.colorScheme.error, Icons.Default.Error, "Not legal — ${issues.size} issue(s)")
-    }
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.size(8.dp))
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = color, fontWeight = FontWeight.Medium)
-        if (!isLegal && issues.isNotEmpty()) {
+    var showAllWarnings by remember { mutableStateOf(false) }
+
+    // Errors
+    if (!isLegal) {
+        val (color, icon, text) = Triple(MaterialTheme.colorScheme.error, Icons.Default.Error, "Not legal — ${issues.size} issue(s)")
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.size(8.dp))
+            Text(text, style = MaterialTheme.typography.bodyMedium, color = color, fontWeight = FontWeight.Medium)
             Spacer(Modifier.weight(1f))
             TextButton(onClick = { showAllIssues = !showAllIssues }) {
-                Text(
-                    if (showAllIssues) "Hide" else "Show all",
-                    style = MaterialTheme.typography.labelSmall,
-                )
+                Text(if (showAllIssues) "Hide" else "Show all", style = MaterialTheme.typography.labelSmall)
             }
         }
-    }
-    if (!isLegal && issues.isNotEmpty()) {
         if (showAllIssues) {
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 issues.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+            }
+        }
+    } else {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = com.riftcompanion.app.ui.theme.freeColor(), modifier = Modifier.size(20.dp))
+            Spacer(Modifier.size(8.dp))
+            Text("Legal — ready to build", style = MaterialTheme.typography.bodyMedium, color = com.riftcompanion.app.ui.theme.freeColor(), fontWeight = FontWeight.Medium)
+        }
+    }
+
+    // Banlist warnings (always shown if present)
+    if (banlistWarnings.isNotEmpty()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.size(6.dp))
+            Text("${banlistWarnings.size} banned card(s) — legal in 2v2 only", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = { showAllWarnings = !showAllWarnings }) {
+                Text(if (showAllWarnings) "Hide" else "Show", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        if (showAllWarnings) {
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                banlistWarnings.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
     }

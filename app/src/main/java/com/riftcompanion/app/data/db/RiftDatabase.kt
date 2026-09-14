@@ -13,8 +13,9 @@ import androidx.room.RoomDatabase
         SyncMetadataEntity::class,
         DeckEntity::class,
         DeckEntryEntity::class,
+        BanlistEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class RiftDatabase : RoomDatabase() {
@@ -25,4 +26,5 @@ abstract class RiftDatabase : RoomDatabase() {
     abstract fun locationPolicyDao(): LocationPolicyDao
     abstract fun syncMetadataDao(): SyncMetadataDao
     abstract fun deckDao(): DeckDao
+    abstract fun banlistDao(): BanlistDao
 }

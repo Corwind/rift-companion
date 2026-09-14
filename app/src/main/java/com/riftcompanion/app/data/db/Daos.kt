@@ -13,8 +13,20 @@ interface CardIdentityDao {
     @Query("SELECT * FROM card_identities")
     fun getAll(): Flow<List<CardIdentityEntity>>
 
+    @Query("SELECT * FROM card_identities")
+    suspend fun getAllCards(): List<CardIdentityEntity>
+
     @Query("SELECT * FROM card_identities WHERE nameSlug IN (:nameSlugs)")
     suspend fun getByIds(nameSlugs: List<String>): List<CardIdentityEntity>
+
+    @Query("""
+        SELECT * FROM card_identities
+        WHERE displayName LIKE '%' || :query || '%'
+           OR nameSlug LIKE '%' || :query || '%'
+           OR attributesJson LIKE '%' || :query || '%'
+        LIMIT :limit
+    """)
+    suspend fun searchCards(query: String, limit: Int = 20): List<CardIdentityEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(entities: List<CardIdentityEntity>)
