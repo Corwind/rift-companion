@@ -152,8 +152,8 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideBanlistFetcher(okHttpClient: OkHttpClient): BanlistFetcher {
-        return BanlistFetcher(okHttpClient)
+    fun provideBanlistFetcher(): BanlistFetcher {
+        return BanlistFetcher()
     }
 
     @Provides
