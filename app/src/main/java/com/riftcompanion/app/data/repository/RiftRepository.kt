@@ -2,7 +2,6 @@ package com.riftcompanion.app.data.repository
 
 import com.riftcompanion.app.data.api.BanlistFetcher
 import com.riftcompanion.app.data.api.CardNexusClient
-import com.riftcompanion.app.data.db.BanlistDao
 import com.riftcompanion.app.data.db.CardIdentityDao
 import com.riftcompanion.app.data.db.CardPrintingDao
 import com.riftcompanion.app.data.db.EntityConverter
@@ -30,6 +29,7 @@ import com.riftcompanion.app.domain.model.LocationQuantity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -51,7 +51,6 @@ class RiftRepository @Inject constructor(
     private val inventoryLocationDao: InventoryLocationDao,
     private val locationPolicyDao: LocationPolicyDao,
     private val syncMetadataDao: SyncMetadataDao,
-    private val banlistDao: BanlistDao,
 ) {
 
     // ── Sync ────────────────────────────────────────────────────────────
@@ -118,19 +117,7 @@ class RiftRepository @Inject constructor(
                 }
             }
 
-            // 6. Fetch and store banlist (best-effort, non-fatal)
-            runCatching {
-                val banlist = banlistFetcher.fetchBanlist().getOrThrow()
-                banlistDao.replaceAll(banlist.map { entry ->
-                    com.riftcompanion.app.data.db.BanlistEntity(
-                        cardName = entry.cardName,
-                        cardType = if (entry.cardType == BanlistEntryType.CARD) "card" else "battlefield",
-                        format = entry.format,
-                        effectiveDate = entry.effectiveDate,
-                        sourceUrl = entry.sourceUrl,
-                    )
-                })
-            }
+            // Banlist is now static — no DB storage needed
 
             val completedAt = System.currentTimeMillis()
             syncMetadataDao.set("last_sync", completedAt.toString())
@@ -224,35 +211,13 @@ class RiftRepository @Inject constructor(
 
     // ── Banlist ────────────────────────────────────────────────────────
 
-    fun banlistFlow(): Flow<List<BanlistEntry>> = banlistDao.getAll().map { entities ->
-        entities.map { e ->
-            BanlistEntry(
-                cardName = e.cardName,
-                cardType = if (e.cardType == "battlefield") BanlistEntryType.BATTLEFIELD else BanlistEntryType.CARD,
-                format = e.format,
-                effectiveDate = e.effectiveDate,
-                sourceUrl = e.sourceUrl,
-            )
-        }
-    }
+    fun banlistFlow(): Flow<List<BanlistEntry>> = flowOf(banlistFetcher.getStaticBanlist())
 
-    suspend fun getBannedCardNames(): Set<String> = banlistDao.getBannedCards().map { it.cardName }.toSet()
-    suspend fun getBannedBattlefieldNames(): Set<String> = banlistDao.getBannedBattlefields().map { it.cardName }.toSet()
+    suspend fun getBannedCardNames(): Set<String> = banlistFetcher.getStaticBanlist().filter { it.cardType == BanlistEntryType.CARD }.map { it.cardName }.toSet()
+    suspend fun getBannedBattlefieldNames(): Set<String> = banlistFetcher.getStaticBanlist().filter { it.cardType == BanlistEntryType.BATTLEFIELD }.map { it.cardName }.toSet()
 
     suspend fun fetchBanlistNow(): Result<List<BanlistEntry>> = withContext(Dispatchers.IO) {
-        runCatching {
-            val banlist = banlistFetcher.fetchBanlist().getOrThrow()
-            banlistDao.replaceAll(banlist.map { entry ->
-                com.riftcompanion.app.data.db.BanlistEntity(
-                    cardName = entry.cardName,
-                    cardType = if (entry.cardType == BanlistEntryType.CARD) "card" else "battlefield",
-                    format = entry.format,
-                    effectiveDate = entry.effectiveDate,
-                    sourceUrl = entry.sourceUrl,
-                )
-            })
-            banlist
-        }
+        Result.success(banlistFetcher.getStaticBanlist())
     }
 
     // ── Location API mutations ─────────────────────────────────────────

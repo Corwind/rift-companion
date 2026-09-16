@@ -10,7 +10,6 @@ import coil3.memory.MemoryCache
 import coil3.request.crossfade
 import com.riftcompanion.app.data.api.BanlistFetcher
 import com.riftcompanion.app.data.api.CardNexusClient
-import com.riftcompanion.app.data.db.BanlistDao
 import com.riftcompanion.app.data.db.CardIdentityDao
 import com.riftcompanion.app.data.db.CardPrintingDao
 import com.riftcompanion.app.data.db.DeckDao
@@ -85,7 +84,7 @@ object AppModule {
         }
     }
 
-    // Migration from v4 → v5: add banlist table
+    // Migration from v4 → v5: add banlist table (now removed, but kept for upgrade path)
     val MIGRATION_4_5 = object : Migration(4, 5) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("""
@@ -100,6 +99,13 @@ object AppModule {
         }
     }
 
+    // Migration from v5 → v6: drop banlist table (banlist is now static, not stored in DB)
+    val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("DROP TABLE IF EXISTS banlist")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): RiftDatabase {
@@ -108,7 +114,7 @@ object AppModule {
             RiftDatabase::class.java,
             "rift_companion.db",
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -120,7 +126,6 @@ object AppModule {
     @Provides fun provideLocationPolicyDao(db: RiftDatabase): LocationPolicyDao = db.locationPolicyDao()
     @Provides fun provideSyncMetadataDao(db: RiftDatabase): SyncMetadataDao = db.syncMetadataDao()
     @Provides fun provideDeckDao(db: RiftDatabase): DeckDao = db.deckDao()
-    @Provides fun provideBanlistDao(db: RiftDatabase): BanlistDao = db.banlistDao()
 
     @Provides
     @Singleton
@@ -167,12 +172,11 @@ object AppModule {
         inventoryLocationDao: InventoryLocationDao,
         locationPolicyDao: LocationPolicyDao,
         syncMetadataDao: SyncMetadataDao,
-        banlistDao: BanlistDao,
     ): RiftRepository {
         return RiftRepository(
             client, banlistFetcher, cardIdentityDao, cardPrintingDao,
             inventoryLineDao, inventoryLocationDao,
-            locationPolicyDao, syncMetadataDao, banlistDao,
+            locationPolicyDao, syncMetadataDao,
         )
     }
 

@@ -18,6 +18,7 @@ data class CatalogueUiState(
     val viewMode: CardViewMode = CardViewMode.GRID,
     val isLoading: Boolean = false,
     val error: String? = null,
+    val bannedCards: Set<String> = emptySet(),
 )
 
 @HiltViewModel
@@ -32,7 +33,12 @@ class CatalogueViewModel @Inject constructor(
         repository.catalogueCardsFlow(),
         _searchQuery,
         _viewMode,
-    ) { cards, search, viewMode ->
+        repository.banlistFlow(),
+    ) { cards, search, viewMode, banlist ->
+        val bannedNames = banlist
+            .filter { it.cardType == com.riftcompanion.app.domain.model.BanlistEntryType.CARD }
+            .map { it.cardName.lowercase() }
+            .toSet()
         val filtered = (if (search.isBlank()) cards else cards.filter { card ->
             card.identity.appSearchText.contains(search, ignoreCase = true) ||
                 card.expansionSlugs.any { it.contains(search, ignoreCase = true) } ||
@@ -44,6 +50,7 @@ class CatalogueViewModel @Inject constructor(
             viewMode = viewMode,
             isLoading = false,
             error = null,
+            bannedCards = bannedNames,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CatalogueUiState(isLoading = true))
 

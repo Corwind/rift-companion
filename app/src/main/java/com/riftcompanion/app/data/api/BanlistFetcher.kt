@@ -29,19 +29,21 @@ class BanlistFetcher @Inject constructor() {
     private val staticBans = listOf(
         // First bans — effective March 31, 2026
         BanlistEntry("Called Shot", BanlistEntryType.CARD, effectiveDate = "March 31, 2026", sourceUrl = FIRST_BANS_URL),
-        BanlistEntry("Draven, Vanquisher", BanlistEntryType.CARD, effectiveDate = "March 31, 2026", sourceUrl = FIRST_BANS_URL),
+        BanlistEntry("Draven - Vanquisher", BanlistEntryType.CARD, effectiveDate = "March 31, 2026", sourceUrl = FIRST_BANS_URL),
         BanlistEntry("Fight or Flight", BanlistEntryType.CARD, effectiveDate = "March 31, 2026", sourceUrl = FIRST_BANS_URL),
         BanlistEntry("Scrapheap", BanlistEntryType.CARD, effectiveDate = "March 31, 2026", sourceUrl = FIRST_BANS_URL),
-        BanlistEntry("Dreaming Tree", BanlistEntryType.BATTLEFIELD, effectiveDate = "March 31, 2026", sourceUrl = FIRST_BANS_URL),
+        BanlistEntry("The Dreaming Tree", BanlistEntryType.BATTLEFIELD, effectiveDate = "March 31, 2026", sourceUrl = FIRST_BANS_URL),
         BanlistEntry("Obelisk of Power", BanlistEntryType.BATTLEFIELD, effectiveDate = "March 31, 2026", sourceUrl = FIRST_BANS_URL),
         BanlistEntry("Reaver's Row", BanlistEntryType.BATTLEFIELD, effectiveDate = "March 31, 2026", sourceUrl = FIRST_BANS_URL),
 
         // September bans — effective September 18, 2026
-        BanlistEntry("Ekko, Recurrent", BanlistEntryType.CARD, effectiveDate = "September 18, 2026", sourceUrl = SEPTEMBER_BANS_URL),
+        BanlistEntry("Ekko - Recurrent", BanlistEntryType.CARD, effectiveDate = "September 18, 2026", sourceUrl = SEPTEMBER_BANS_URL),
         BanlistEntry("Stacked Deck", BanlistEntryType.CARD, effectiveDate = "September 18, 2026", sourceUrl = SEPTEMBER_BANS_URL),
     )
 
     suspend fun fetchBanlist(): Result<List<BanlistEntry>> = withContext(Dispatchers.IO) {
         Result.success(staticBans)
     }
+
+    fun getStaticBanlist(): List<BanlistEntry> = staticBans
 }

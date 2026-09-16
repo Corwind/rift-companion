@@ -921,7 +921,7 @@ private fun InventoryGridCard(card: InventoryCardSummary, isBanned: Boolean, onC
                     modifier = Modifier.weight(1f),
                 )
                 if (isBanned) {
-                    com.riftcompanion.app.ui.components.BannedBadge()
+                    // Banned band is rendered by CardArtwork below
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -932,6 +932,7 @@ private fun InventoryGridCard(card: InventoryCardSummary, isBanned: Boolean, onC
                     .fillMaxWidth()
                     .aspectRatio(5f / 7f),
                 cornerRadius = 11,
+                isBanned = isBanned,
             )
             Spacer(Modifier.height(8.dp))
             FlowRow(
@@ -970,6 +971,7 @@ private fun InventoryListRow(card: InventoryCardSummary, isBanned: Boolean, onCl
                     .width(44.dp)
                     .height(62.dp),
                 cornerRadius = 6,
+                isBanned = isBanned,
             )
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -981,9 +983,6 @@ private fun InventoryListRow(card: InventoryCardSummary, isBanned: Boolean, onCl
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    if (isBanned) {
-                        com.riftcompanion.app.ui.components.BannedBadge()
-                    }
                 }
                 Text(
                     text = listOfNotNull(card.identity.cardType, card.expansion, card.rarity).joinToString(" · "),

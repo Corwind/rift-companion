@@ -117,11 +117,13 @@ fun CardDetailScreen(
             ) {
                 // Hero header
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    val isBanned = viewModel.isCardBanned(identity.displayName)
                     CardArtwork(
                         imageURL = card.imageURL,
                         name = identity.displayName,
                         modifier = Modifier.width(160.dp).aspectRatio(5f / 7f),
                         cornerRadius = 14,
+                        isBanned = isBanned,
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -131,9 +133,6 @@ fun CardDetailScreen(
                                 color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.weight(1f),
                             )
-                            if (viewModel.isCardBanned(identity.displayName)) {
-                                com.riftcompanion.app.ui.components.BannedBadge()
-                            }
                         }
                         val typeLine = listOfNotNull(identity.superType, identity.cardType)
                             .filter { it.isNotBlank() }.distinct().joinToString(" · ")

@@ -126,7 +126,7 @@ fun CatalogueScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(uiState.cards, key = { it.id }) { card ->
-                        CatalogueGridCard(card = card, onClick = { onCardClick(card.id, false) })
+                        CatalogueGridCard(card = card, isBanned = card.identity.displayName.lowercase() in uiState.bannedCards, onClick = { onCardClick(card.id, false) })
                     }
                 }
             } else {
@@ -135,7 +135,7 @@ fun CatalogueScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(uiState.cards, key = { it.id }) { card ->
-                        CatalogueListRow(card = card, onClick = { onCardClick(card.id, false) })
+                        CatalogueListRow(card = card, isBanned = card.identity.displayName.lowercase() in uiState.bannedCards, onClick = { onCardClick(card.id, false) })
                     }
                 }
             }
@@ -178,7 +178,7 @@ private fun EmptyState(
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun CatalogueGridCard(card: CatalogueCardSummary, onClick: () -> Unit) {
+private fun CatalogueGridCard(card: CatalogueCardSummary, isBanned: Boolean, onClick: () -> Unit) {
     ThemedCardSurface(
         modifier = Modifier.clickable(onClick = onClick),
         cornerRadius = 14,
@@ -198,6 +198,7 @@ private fun CatalogueGridCard(card: CatalogueCardSummary, onClick: () -> Unit) {
                     .fillMaxWidth()
                     .aspectRatio(5f / 7f),
                 cornerRadius = 11,
+                isBanned = isBanned,
             )
             Spacer(Modifier.height(8.dp))
             FlowRow(
@@ -220,7 +221,7 @@ private fun CatalogueGridCard(card: CatalogueCardSummary, onClick: () -> Unit) {
 }
 
 @Composable
-private fun CatalogueListRow(card: CatalogueCardSummary, onClick: () -> Unit) {
+private fun CatalogueListRow(card: CatalogueCardSummary, isBanned: Boolean, onClick: () -> Unit) {
     ThemedCardSurface(
         modifier = Modifier
             .fillMaxWidth()
@@ -235,6 +236,7 @@ private fun CatalogueListRow(card: CatalogueCardSummary, onClick: () -> Unit) {
                     .width(44.dp)
                     .height(62.dp),
                 cornerRadius = 6,
+                isBanned = isBanned,
             )
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
