@@ -16,8 +16,8 @@ android {
         applicationId = "com.riftcompanion.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "2.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -26,7 +26,7 @@ android {
     // Version name with suffix per build type: release=1.0.0, debug=1.0.0-debug, dev=1.0.0-dev
     // Release builds show "dev" suffix when built locally (no CI env var).
     // CI sets IS_CI=true so the release build type shows the clean version.
-    val baseVersion = "1.0.0"
+    val baseVersion = "2.0.0"
     val isCi = System.getenv("IS_CI") == "true"
 
     signingConfigs {
