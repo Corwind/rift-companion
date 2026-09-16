@@ -59,11 +59,16 @@ class InventoryViewModel @Inject constructor(
                     .filter { it.cardType == com.riftcompanion.app.domain.model.BanlistEntryType.CARD }
                     .map { it.cardName.lowercase() }
                     .toSet()
+                android.util.Log.d("InventoryVM", "Banned cards loaded: $cachedBannedCards")
             }
         }
     }
 
-    fun isCardBanned(cardName: String): Boolean = cardName.lowercase() in cachedBannedCards
+    fun isCardBanned(cardName: String): Boolean {
+        val banned = cardName.lowercase() in cachedBannedCards
+        if (banned) android.util.Log.d("InventoryVM", "Card '$cardName' IS banned")
+        return banned
+    }
 
     private val _searchQuery = MutableStateFlow("")
     private val _selectedLocation = MutableStateFlow<String?>(null)
