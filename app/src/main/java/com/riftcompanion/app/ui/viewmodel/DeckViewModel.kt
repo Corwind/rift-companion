@@ -19,6 +19,7 @@ import com.riftcompanion.app.data.deck.RiftDeckParser
 import com.riftcompanion.app.data.deck.TextDeckParser
 import com.riftcompanion.app.domain.model.CardIdentityInfo
 import com.riftcompanion.app.domain.model.DeckAvailability
+import com.riftcompanion.app.domain.model.DeckBuildPlanner
 import com.riftcompanion.app.domain.model.DeckZone
 import com.riftcompanion.app.domain.model.ValidationSeverity
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -111,6 +112,7 @@ data class DeckBuildPreview(
     val deckLocationName: String,
     val isNewLocation: Boolean,
     val movements: List<CardMovement>,
+    val returns: List<CardMovement> = emptyList(),
     val missing: List<MissingCard>,
     val isAlreadyBuilt: Boolean = false,
 )
@@ -886,6 +888,7 @@ class DeckViewModel @Inject constructor(
                     ?: throw IllegalArgumentException("Deck not found")
                 val entries = deckDao.getEntriesForDeck(deckId)
                 val identities = cardIdentityDao.getAll().first().associateBy { it.nameSlug }
+                val allPrintings = cardPrintingDao.getAll().first().associateBy { it.productID }
 
                 // Determine deck location
                 val existingLocation = deck.linkedLocationName
@@ -902,61 +905,53 @@ class DeckViewModel @Inject constructor(
                     }
                 }
 
-                // Get all storage locations (normalized for case-insensitive matching)
-                val storageLocations = locationPolicyDao.getStorageLocations()
-                val storageLocationNames = storageLocations.map { it.name.trim().lowercase() }.toSet()
-                val deckLocationNorm = deckLocationName.trim().lowercase()
+                // Get all storage locations
+                val storageLocs = locationPolicyDao.getStorageLocations()
+                val storageLocationNames = storageLocs.map { it.name.trim().lowercase() }.toSet()
+                val storageDisplayNames = storageLocs.associate { it.name.trim().lowercase() to it.displayName }
 
-                // For each deck entry, find available cards.
-                // Cards already at the deck location count as available (no movement needed).
-                // Only the shortfall is moved from storage.
-                // Runes and battlefields are always available — they don't need to be in inventory.
-                val movements = mutableListOf<CardMovement>()
-                val missing = mutableListOf<MissingCard>()
-
-                for (entry in entries) {
-                    val displayName = identities[entry.nameSlug]?.displayName ?: entry.nameSlug
-                    val needed = entry.quantity
-                    val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
-
-                    val allLines = inventoryLineDao.getLinesByCardSlug(entry.nameSlug)
-
-                    // Cards already at the deck location — no movement needed
-                    val alreadyAtDeck = allLines
-                        .filter { it.locationName?.trim()?.lowercase() == deckLocationNorm }
-                        .sumOf { it.quantity }
-
-                    // Cards in storage that can be moved to cover the shortfall
-                    val storageLines = allLines
-                        .filter { it.locationName?.trim()?.lowercase() in storageLocationNames }
-                        .sortedBy { it.locationName }
-
-                    var remaining = maxOf(0, needed - alreadyAtDeck)
-                    for (line in storageLines) {
-                        if (remaining <= 0) break
-                        val take = minOf(remaining, line.quantity)
-                        movements.add(CardMovement(
+                // Gather all inventory lines for cards in the deck
+                val linesForEntries = entries.flatMap { entry ->
+                    inventoryLineDao.getLinesByCardSlug(entry.nameSlug).map { line ->
+                        DeckBuildPlanner.LineInfo(
                             nameSlug = entry.nameSlug,
-                            displayName = displayName,
-                            quantity = take,
-                            fromLocation = line.locationName ?: "Unknown",
-                            toLocation = deckLocationName,
-                        ))
-                        remaining -= take
-                    }
-
-                    // For runes and battlefields: remaining cards are created at deck location (not missing)
-                    // For other zones: remaining cards are missing
-                    if (remaining > 0 && zone != DeckZone.rune && zone != DeckZone.battlefield) {
-                        val available = needed - remaining
-                        missing.add(MissingCard(
-                            nameSlug = entry.nameSlug,
-                            displayName = displayName,
-                            needed = needed,
-                            available = available,
-                        ))
+                            locationName = line.locationName ?: "",
+                            quantity = line.quantity,
+                        )
                     }
                 }
+                // Also get lines at the deck location for removed cards
+                val linesAtDeckLoc = inventoryLineDao.getByLocation(deckLocationName)
+                    .mapNotNull { line ->
+                        val nameSlug = allPrintings[line.productId]?.nameSlug ?: return@mapNotNull null
+                        DeckBuildPlanner.LineInfo(nameSlug, line.locationName ?: "", line.quantity)
+                    }
+                // Merge and dedup
+                val allLines = (linesForEntries + linesAtDeckLoc)
+                    .distinctBy { it.nameSlug + "_" + it.locationName }
+
+                // Build entry infos for the planner
+                val entryInfos = entries.map { entry ->
+                    val displayName = identities[entry.nameSlug]?.displayName ?: entry.nameSlug
+                    val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
+                    DeckBuildPlanner.EntryInfo(
+                        nameSlug = entry.nameSlug,
+                        displayName = displayName,
+                        quantity = entry.quantity,
+                        zone = zone,
+                        sourceLocationName = entry.sourceLocationName,
+                    )
+                }
+
+                val plan = DeckBuildPlanner.computePlan(
+                    entries = entryInfos,
+                    lines = allLines,
+                    storageLocations = storageLocationNames,
+                    deckLocationName = deckLocationName,
+                    deckLocationDisplayName = deckLocationName,
+                    storageDisplayNames = storageDisplayNames,
+                    isAlreadyBuilt = deck.state == "assembled",
+                )
 
                 _buildState.value = DeckBuildUiState(
                     preview = DeckBuildPreview(
@@ -964,8 +959,9 @@ class DeckViewModel @Inject constructor(
                         deckName = deck.name,
                         deckLocationName = deckLocationName,
                         isNewLocation = isNewLocation,
-                        movements = movements,
-                        missing = missing,
+                        movements = plan.movements.map { CardMovement(it.nameSlug, it.displayName, it.quantity, it.fromLocation, it.toLocation) },
+                        returns = plan.returns.map { CardMovement(it.nameSlug, it.displayName, it.quantity, it.fromLocation, it.toLocation) },
+                        missing = plan.missing.map { MissingCard(it.nameSlug, it.displayName, it.needed, it.available) },
                         isAlreadyBuilt = deck.state == "assembled",
                     ),
                     isLoading = false,
@@ -1051,6 +1047,60 @@ class DeckViewModel @Inject constructor(
                         ))
 
                         toMove -= take
+                    }
+                }
+
+                // Process returns: move cards from deck location back to storage
+                for (returnMovement in preview.returns) {
+                    val deckLines = inventoryLineDao.getLinesByCardSlug(returnMovement.nameSlug)
+                        .filter { it.locationName?.trim()?.lowercase() == deckLocationNormalized }
+                        .sortedBy { it.quantity }
+
+                    var toReturn = returnMovement.quantity
+                    for (line in deckLines) {
+                        if (toReturn <= 0) break
+                        val take = minOf(toReturn, line.quantity)
+                        val newDeckQty = line.quantity - take
+
+                        // Reduce/remove line at deck location
+                        if (newDeckQty > 0) {
+                            inventoryLineDao.updateLocationAndQuantity(line.id, line.locationName, newDeckQty)
+                        } else {
+                            inventoryLineDao.updateLocationAndQuantity(line.id, line.locationName, 0)
+                        }
+
+                        // Add line at target storage location
+                        val returnLocNorm = returnMovement.toLocation.trim().lowercase()
+                        val existingReturnLine = inventoryLineDao.getLinesByCardSlug(returnMovement.nameSlug)
+                            .find { it.locationName?.trim()?.lowercase() == returnLocNorm }
+                        if (existingReturnLine != null) {
+                            inventoryLineDao.updateLocationAndQuantity(
+                                existingReturnLine.id,
+                                existingReturnLine.locationName,
+                                existingReturnLine.quantity + take,
+                            )
+                        } else {
+                            val newLineId = "${returnMovement.nameSlug}_${returnLocNorm}_${System.currentTimeMillis()}"
+                            inventoryLineDao.insertAll(listOf(
+                                InventoryLineEntity(
+                                    id = newLineId,
+                                    customId = line.customId,
+                                    productId = line.productId,
+                                    finish = line.finish,
+                                    condition = line.condition,
+                                    language = line.language,
+                                    quantity = take,
+                                    locationName = returnMovement.toLocation,
+                                    tagsCsv = line.tagsCsv,
+                                    comment = line.comment,
+                                    notes = line.notes,
+                                    forSale = false,
+                                    updatedAt = System.currentTimeMillis().toString(),
+                                ),
+                            ))
+                        }
+
+                        toReturn -= take
                     }
                 }
 
