@@ -66,21 +66,6 @@ data class LocationQuantity(
 )
 
 @Serializable
-data class CardMarketListing(
-    val productID: Long,
-    val printingSlug: String,
-    val expansionSlug: String? = null,
-    val printNumber: String? = null,
-    val url: String,
-    val currency: String? = null,
-    val priceCents: Int? = null,
-    val priceSource: String? = null,
-    val scrapedAt: String,
-) {
-    val id: Long get() = productID
-}
-
-@Serializable
 data class CataloguePrintingMetadata(
     val productID: Long,
     val printingSlug: String,
@@ -99,7 +84,6 @@ data class CatalogueCardSummary(
     val printingCount: Int,
     val expansionSlugs: List<String>,
     val rarities: List<String>,
-    val marketListings: List<CardMarketListing> = emptyList(),
     val totalOwned: Int = 0,
 ) {
     val id: String get() = identity.nameSlug
@@ -116,7 +100,6 @@ data class InventoryCardSummary(
     val rarity: String? = null,
     val finish: String? = null,
     val language: String? = null,
-    val marketListings: List<CardMarketListing> = emptyList(),
 ) {
     val id: String get() = identity.nameSlug
 }
