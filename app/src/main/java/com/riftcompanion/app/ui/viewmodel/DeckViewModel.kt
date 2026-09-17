@@ -112,6 +112,7 @@ data class DeckBuildPreview(
     val isNewLocation: Boolean,
     val movements: List<CardMovement>,
     val missing: List<MissingCard>,
+    val isAlreadyBuilt: Boolean = false,
 )
 
 data class MissingCard(
@@ -965,6 +966,7 @@ class DeckViewModel @Inject constructor(
                         isNewLocation = isNewLocation,
                         movements = movements,
                         missing = missing,
+                        isAlreadyBuilt = deck.state == "assembled",
                     ),
                     isLoading = false,
                 )
