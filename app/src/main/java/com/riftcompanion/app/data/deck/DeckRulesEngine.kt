@@ -118,7 +118,7 @@ object DeckRulesEngine {
         // Banned cards
         validateBans(entries, identities, ruleset, issues)
 
-        return issues
+        return issues.distinctBy { it.code to it.message }
     }
 
     private fun validateZoneCount(
