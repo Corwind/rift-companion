@@ -106,6 +106,34 @@ object AppModule {
         }
     }
 
+    // Migration from v6 → v7: rename mightCost column to might in card_identities
+    val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // SQLite doesn't support RENAME COLUMN before 3.25, so recreate the table
+            db.execSQL("""
+                CREATE TABLE card_identities_new (
+                    nameSlug TEXT NOT NULL PRIMARY KEY,
+                    gameID TEXT NOT NULL,
+                    displayName TEXT NOT NULL,
+                    cardType TEXT,
+                    superType TEXT,
+                    domainsCsv TEXT NOT NULL,
+                    tagsCsv TEXT NOT NULL,
+                    energyCost INTEGER,
+                    might INTEGER,
+                    attributesJson TEXT NOT NULL
+                )
+            """.trimIndent())
+            db.execSQL("""
+                INSERT INTO card_identities_new (nameSlug, gameID, displayName, cardType, superType, domainsCsv, tagsCsv, energyCost, might, attributesJson)
+                SELECT nameSlug, gameID, displayName, cardType, superType, domainsCsv, tagsCsv, energyCost, mightCost, attributesJson
+                FROM card_identities
+            """.trimIndent())
+            db.execSQL("DROP TABLE card_identities")
+            db.execSQL("ALTER TABLE card_identities_new RENAME TO card_identities")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): RiftDatabase {
@@ -114,7 +142,7 @@ object AppModule {
             RiftDatabase::class.java,
             "rift_companion.db",
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
             .fallbackToDestructiveMigration()
             .build()
     }
