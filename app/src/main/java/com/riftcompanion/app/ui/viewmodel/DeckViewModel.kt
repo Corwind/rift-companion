@@ -68,6 +68,7 @@ data class DeckEntryDisplay(
     val domains: List<String> = emptyList(),
     // Availability info for deck building
     val availableInStorage: Int = 0,
+    val inDeckLocation: Int = 0,
     val inOtherDecks: Int = 0,
     val totalOwned: Int = 0,
     val isMissing: Boolean = false,
@@ -215,8 +216,8 @@ class DeckViewModel @Inject constructor(
             val allPrintings = cardPrintingDao.getAll().first().groupBy { it.nameSlug }
 
             // Get storage locations and deck locations
-            val storageLocations = locationPolicyDao.getStorageLocations().map { it.name }.toSet()
-            val deckLocations = locationPolicyDao.getByKind("deck").map { it.name }.toSet()
+            val storageLocations = locationPolicyDao.getStorageLocations().map { it.name.trim().lowercase() }.toSet()
+            val deckLocations = locationPolicyDao.getByKind("deck").map { it.name.trim().lowercase() }.toSet()
 
             // For each entry, compute availability
             val linkedLoc = deck?.linkedLocationName
@@ -228,11 +229,13 @@ class DeckViewModel @Inject constructor(
                 // Find all inventory lines for this card
                 val allLines = inventoryLineDao.getLinesByCardSlug(entry.nameSlug)
                 val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
+                val lineLocs = allLines.map { it.locationName }
+                val lineQtys = allLines.map { it.quantity }
                 val availability = DeckAvailability.compute(
                     quantity = entry.quantity,
                     zone = zone,
-                    lineLocations = allLines.map { it.locationName },
-                    lineQuantities = allLines.map { it.quantity },
+                    lineLocations = lineLocs,
+                    lineQuantities = lineQtys,
                     storageLocations = storageLocations,
                     deckLocations = deckLocations,
                     linkedLocation = linkedLoc,
@@ -250,6 +253,7 @@ class DeckViewModel @Inject constructor(
                     rarity = printings.firstOrNull()?.rarity,
                     domains = identity?.tagsCsv?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
                     availableInStorage = availability.availableInStorage,
+                    inDeckLocation = availability.inDeckLocation,
                     inOtherDecks = availability.inOtherDecks,
                     totalOwned = availability.totalOwned,
                     isMissing = availability.isMissing,
@@ -1096,8 +1100,8 @@ class DeckViewModel @Inject constructor(
         val entries = deckDao.getEntriesForDeck(deckId)
         val identities = cardIdentityDao.getAll().first().associateBy { it.nameSlug }
         val allPrintings = cardPrintingDao.getAll().first().groupBy { it.nameSlug }
-        val storageLocations = locationPolicyDao.getStorageLocations().map { it.name }.toSet()
-        val deckLocations = locationPolicyDao.getByKind("deck").map { it.name }.toSet()
+        val storageLocations = locationPolicyDao.getStorageLocations().map { it.name.trim().lowercase() }.toSet()
+        val deckLocations = locationPolicyDao.getByKind("deck").map { it.name.trim().lowercase() }.toSet()
         val linkedLoc = deckDao.getDeck(deckId)?.linkedLocationName
 
         val display = entries.map { entry ->
@@ -1129,6 +1133,7 @@ class DeckViewModel @Inject constructor(
                 rarity = printings.firstOrNull()?.rarity,
                 domains = identity?.tagsCsv?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
                 availableInStorage = availability.availableInStorage,
+                inDeckLocation = availability.inDeckLocation,
                 inOtherDecks = availability.inOtherDecks,
                 totalOwned = availability.totalOwned,
                 isMissing = availability.isMissing,

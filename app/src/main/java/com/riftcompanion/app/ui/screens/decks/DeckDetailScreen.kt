@@ -702,19 +702,23 @@ private fun DeckCardRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                // Compact availability line
+                // Availability: in deck / in storage / missing
                 val availText = buildString {
-                    append("${entry.availableInStorage} available")
-                    if (entry.inOtherDecks > 0) append(" · ${entry.inOtherDecks} in decks")
-                    if (entry.isMissing) append(" · ${entry.missingCount} missing")
+                    val parts = mutableListOf<String>()
+                    if (entry.inDeckLocation > 0) parts.add("${entry.inDeckLocation} in deck")
+                    if (entry.availableInStorage > 0) parts.add("${entry.availableInStorage} in storage")
+                    if (entry.inOtherDecks > 0) parts.add("${entry.inOtherDecks} in other decks")
+                    if (entry.isMissing) parts.add("${entry.missingCount} missing")
+                    append(parts.joinToString(" · "))
                 }
                 Text(
                     availText,
                     style = MaterialTheme.typography.labelSmall,
                     color = when {
                         entry.isMissing -> MaterialTheme.colorScheme.error
-                        entry.availableInStorage < entry.quantity -> MaterialTheme.colorScheme.onSurfaceVariant
-                        else -> com.riftcompanion.app.ui.theme.freeColor()
+                        entry.inDeckLocation >= entry.quantity -> com.riftcompanion.app.ui.theme.freeColor()
+                        entry.availableInStorage + entry.inDeckLocation >= entry.quantity -> com.riftcompanion.app.ui.theme.freeColor()
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
                     },
                 )
             }
