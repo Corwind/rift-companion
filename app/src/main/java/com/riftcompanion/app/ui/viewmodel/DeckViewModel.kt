@@ -693,6 +693,23 @@ class DeckViewModel @Inject constructor(
 
                 deckDao.insertEntries(entries)
 
+                // Link the location policy to this deck (1:1 linking)
+                if (policy != null) {
+                    locationPolicyDao.upsert(policy.copy(linkedDeckId = deckId))
+                } else {
+                    // Create policy if it doesn't exist yet
+                    locationPolicyDao.upsert(LocationPolicyEntity(
+                        name = locationName,
+                        displayName = locationName,
+                        color = null,
+                        icon = null,
+                        kind = "deck",
+                        countsAsAvailable = false,
+                        hidden = false,
+                        linkedDeckId = deckId,
+                    ))
+                }
+
                 val count = deckDao.getEntryCount(deckId)
                 _importState.value = ImportUiState(
                     success = DeckSummary(deckId, name, count, now),

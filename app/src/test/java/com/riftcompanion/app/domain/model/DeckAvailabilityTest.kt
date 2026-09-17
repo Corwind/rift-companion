@@ -28,8 +28,9 @@ class DeckAvailabilityTest {
             deckLocations = decks,
             linkedLocation = "Vi deck",
         )
-        // 1 in storage + 2 at deck location = 3 available, not missing
-        assertEquals(3, result.availableInStorage)
+        // 1 in storage + 2 at deck location = 3 total available, not missing
+        assertEquals(1, result.availableInStorage)
+        assertEquals(2, result.inDeckLocation)
         assertFalse(result.isMissing)
         assertEquals(0, result.missingCount)
     }
@@ -46,7 +47,8 @@ class DeckAvailabilityTest {
             deckLocations = decks,
             linkedLocation = "vi deck",
         )
-        assertEquals(3, result.availableInStorage)
+        assertEquals(0, result.availableInStorage)
+        assertEquals(3, result.inDeckLocation)
         assertFalse(result.isMissing)
     }
 
@@ -93,8 +95,9 @@ class DeckAvailabilityTest {
             deckLocations = decks,
             linkedLocation = "Vi deck",
         )
-        // 1 storage + 1 at deck = 2 available, need 4 → 2 missing
-        assertEquals(2, result.availableInStorage)
+        // 1 storage + 1 at deck = 2 total available, need 4 → 2 missing
+        assertEquals(1, result.availableInStorage)
+        assertEquals(1, result.inDeckLocation)
         assertTrue(result.isMissing)
         assertEquals(2, result.missingCount)
     }
@@ -159,6 +162,7 @@ class DeckAvailabilityTest {
             linkedLocation = "Vi deck",
         )
         assertEquals(0, result.inOtherDecks)
-        assertEquals(2, result.availableInStorage)
+        assertEquals(0, result.availableInStorage)
+        assertEquals(2, result.inDeckLocation)
     }
 }
