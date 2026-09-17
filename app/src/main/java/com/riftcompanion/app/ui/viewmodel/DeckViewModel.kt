@@ -475,10 +475,15 @@ class DeckViewModel @Inject constructor(
         viewModelScope.launch {
             val saved = savedEntries
             if (saved != null) {
-                deckDao.deleteEntriesForDeck(deckId)
-                deckDao.insertEntries(saved)
-                // Revert built state if necessary
-                revertBuiltStateIfNecessary(deckId)
+                val current = deckDao.getEntriesForDeck(deckId)
+                // Only restore + revert if something actually changed
+                val changed = current.size != saved.size ||
+                    current.zip(saved).any { (c, s) -> c.quantity != s.quantity || c.zone != s.zone || c.nameSlug != s.nameSlug }
+                if (changed) {
+                    deckDao.deleteEntriesForDeck(deckId)
+                    deckDao.insertEntries(saved)
+                    revertBuiltStateIfNecessary(deckId)
+                }
             }
             savedEntries = null
             loadDeckDetail(deckId)
