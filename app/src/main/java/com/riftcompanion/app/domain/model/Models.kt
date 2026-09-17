@@ -100,6 +100,7 @@ data class CatalogueCardSummary(
     val expansionSlugs: List<String>,
     val rarities: List<String>,
     val marketListings: List<CardMarketListing> = emptyList(),
+    val totalOwned: Int = 0,
 ) {
     val id: String get() = identity.nameSlug
     val preferredImageURL: String? get() = preferredPrinting?.imageURL

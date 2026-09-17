@@ -209,7 +209,7 @@ private fun CatalogueGridCard(card: CatalogueCardSummary, isBanned: Boolean, onC
             }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                QuantityBadge(title = "Owned", value = 0)
+                QuantityBadge(title = "Owned", value = card.totalOwned)
                 Text(
                     text = "${card.printingCount} printing${if (card.printingCount == 1) "" else "s"}",
                     style = MaterialTheme.typography.labelSmall,
