@@ -2,6 +2,7 @@ package com.riftcompanion.app.ui.screens.locations
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -93,7 +94,12 @@ fun LocationsScreen(
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0,0,0,0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showCreateDialog = true }) {
+            FloatingActionButton(
+                onClick = { showCreateDialog = true },
+                modifier = Modifier
+                    .navigationBarsPadding()
+                    .padding(bottom = 72.dp),
+            ) {
                 Icon(Icons.Default.Add, contentDescription = "Create location", tint = MaterialTheme.colorScheme.onSurface)
             }
         },
@@ -121,7 +127,7 @@ fun LocationsScreen(
             }
         } else {
             LazyColumn(
-                modifier = Modifier.padding(padding),
+                modifier = Modifier.padding(padding).statusBarsPadding(),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 100.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
