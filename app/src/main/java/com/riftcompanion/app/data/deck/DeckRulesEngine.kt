@@ -245,9 +245,9 @@ object DeckRulesEngine {
             }
             if (isBanned) {
                 issues.add(DeckValidationIssue(
-                    ValidationSeverity.warning,
+                    ValidationSeverity.error,
                     if (entry.zone == DeckZone.battlefield) "banned_battlefield" else "banned_card",
-                    "${identity.displayName} is banned in 1v1 Constructed. Legal in 2v2.",
+                    "${identity.displayName} is banned in 1v1 Constructed.",
                     listOf(identity.nameSlug),
                 ))
             }
