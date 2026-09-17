@@ -406,6 +406,73 @@ class DeckViewModel @Inject constructor(
         }
     }
 
+    fun renameDeck(deckId: String, newName: String, onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            val deck = deckDao.getDeck(deckId) ?: return@launch
+            val trimmed = newName.trim()
+            if (trimmed.isBlank()) return@launch
+
+            deckDao.insertDeck(deck.copy(
+                name = trimmed,
+                updatedAt = System.currentTimeMillis(),
+            ))
+
+            loadDecks()
+            loadDeckDetail(deckId)
+            onDone()
+        }
+    }
+
+    /**
+     * Save both the deck name and its card entries.
+     * Called when the user taps the save (check) button in edit mode.
+     */
+    fun saveDeck(deckId: String, newName: String, onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            val deck = deckDao.getDeck(deckId) ?: return@launch
+            val trimmed = newName.trim()
+            if (trimmed.isNotBlank()) {
+                deckDao.insertDeck(deck.copy(
+                    name = trimmed,
+                    updatedAt = System.currentTimeMillis(),
+                ))
+            }
+            // Entries are already saved to DB by individual edit operations
+            loadDecks()
+            loadDeckDetail(deckId)
+            onDone()
+        }
+    }
+
+    /**
+     * Snapshot the current deck entries so they can be restored on discard.
+     */
+    private var savedEntries: List<DeckEntryEntity>? = null
+
+    fun beginEditSession(deckId: String) {
+        viewModelScope.launch {
+            savedEntries = deckDao.getEntriesForDeck(deckId)
+        }
+    }
+
+    /**
+     * Discard all edits made during edit mode: restore the original entries.
+     */
+    fun discardEdits(deckId: String, onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            val saved = savedEntries
+            if (saved != null) {
+                deckDao.deleteEntriesForDeck(deckId)
+                deckDao.insertEntries(saved)
+                // Revert built state if necessary
+                revertBuiltStateIfNecessary(deckId)
+            }
+            savedEntries = null
+            loadDeckDetail(deckId)
+            onDone()
+        }
+    }
+
     /**
      * Create a new empty deck definition with a legend card.
      */
