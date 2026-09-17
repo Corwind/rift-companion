@@ -366,7 +366,7 @@ private fun ReturnCard(returnMovement: CardMovement) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.tertiary,
                     )
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(14.dp).padding(start = 4.dp))
+                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(14.dp).padding(start = 4.dp))
                     Text(
                         text = returnMovement.toLocation,
                         style = MaterialTheme.typography.bodySmall,

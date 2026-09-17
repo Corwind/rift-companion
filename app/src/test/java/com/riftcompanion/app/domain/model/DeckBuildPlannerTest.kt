@@ -321,7 +321,9 @@ class DeckBuildPlannerTest {
     }
 
     @Test
-    fun `planned deck with reduced quantity returns excess even when not marked built`() {
+    fun `planned deck with reduced quantity does not return excess when not built`() {
+        // Deck imported from location, has more copies than needed.
+        // Not built, so don't return — extra cards are just stored there.
         val plan = DeckBuildPlanner.computePlan(
             entries = listOf(entry("card-a", qty = 2, source = "Red Box")),
             lines = listOf(line("card-a", "Vi Deck", 5)),
@@ -332,8 +334,7 @@ class DeckBuildPlannerTest {
             isAlreadyBuilt = false,
         )
         assertTrue(plan.movements.isEmpty())
-        assertEquals(1, plan.returns.size)
-        assertEquals(3, plan.returns[0].quantity)
+        assertTrue(plan.returns.isEmpty())
     }
 
     // ── Runes and battlefields ──
