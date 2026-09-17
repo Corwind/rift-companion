@@ -42,6 +42,7 @@ data class DeckSummary(
     val updatedAt: Long,
     val isBuilt: Boolean = false,
     val isLegal: Boolean = false,
+    val hasMissingCards: Boolean = false,
     val legalityIssues: List<String> = emptyList(),
     val banlistWarnings: List<String> = emptyList(),
     val linkedLocationName: String? = null,
@@ -181,6 +182,16 @@ class DeckViewModel @Inject constructor(
                     val issues = DeckRulesEngine.validate(entryData, identityInfos)
                     val isLegal = issues.none { it.severity == ValidationSeverity.error }
 
+                    // Quick missing check: compare total owned vs needed
+                    val ownedBySlug = entries.map { e ->
+                        val owned = inventoryLineDao.getLinesByCardSlug(e.nameSlug).sumOf { it.quantity }
+                        e.nameSlug to owned
+                    }.toMap()
+                    val hasMissing = entries.any { e ->
+                        val owned = ownedBySlug[e.nameSlug] ?: 0
+                        owned < e.quantity
+                    }
+
                     // Get legend artwork
                     val legendEntry = entries.firstOrNull { it.zone == DeckZone.legend.name }
                     val legendIdentity = legendEntry?.let { identities[it.nameSlug] }
@@ -195,6 +206,7 @@ class DeckViewModel @Inject constructor(
                         updatedAt = deck.updatedAt,
                         isBuilt = isBuilt,
                         isLegal = isLegal,
+                        hasMissingCards = hasMissing,
                         legalityIssues = issues.filter { it.severity == ValidationSeverity.error }.map { it.message },
                         banlistWarnings = issues.filter { it.severity == ValidationSeverity.warning }.map { it.message },
                         linkedLocationName = deck.linkedLocationName,
@@ -296,6 +308,7 @@ class DeckViewModel @Inject constructor(
                         updatedAt = it.updatedAt,
                         isBuilt = isBuilt,
                         isLegal = isLegal,
+                        hasMissingCards = display.any { it.isMissing },
                         legalityIssues = issues.filter { it.severity == ValidationSeverity.error }.map { it.message },
                         banlistWarnings = issues.filter { it.severity == ValidationSeverity.warning }.map { it.message },
                         linkedLocationName = it.linkedLocationName,

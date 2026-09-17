@@ -227,12 +227,12 @@ fun DeckDetailScreen(
                     // Not built: show build icon
                     IconButton(
                         onClick = { viewModel.previewBuild(deckId); showBuildPreview = true },
-                        enabled = deck.isLegal,
+                        enabled = deck.isLegal && !deck.hasMissingCards,
                     ) {
                         Icon(
                             Icons.Default.Build,
                             contentDescription = "Build deck",
-                            tint = if (deck.isLegal) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (deck.isLegal && !deck.hasMissingCards) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -254,7 +254,7 @@ fun DeckDetailScreen(
         } else {
             val deck = detailState.deck
             if (deck != null) {
-                LegalityBanner(deck.isLegal, deck.isBuilt, deck.legalityIssues, deck.banlistWarnings)
+                LegalityBanner(deck.isLegal, deck.isBuilt, deck.hasMissingCards, deck.legalityIssues, deck.banlistWarnings)
             }
 
             // Edit mode indicator
@@ -854,7 +854,7 @@ private fun DeckCardGrid(
 }
 
 @Composable
-private fun LegalityBanner(isLegal: Boolean, isBuilt: Boolean, issues: List<String>, banlistWarnings: List<String>) {
+private fun LegalityBanner(isLegal: Boolean, isBuilt: Boolean, hasMissingCards: Boolean, issues: List<String>, banlistWarnings: List<String>) {
     if (isBuilt) return
     var showAllIssues by remember { mutableStateOf(false) }
     var showAllWarnings by remember { mutableStateOf(false) }
@@ -878,6 +878,15 @@ private fun LegalityBanner(isLegal: Boolean, isBuilt: Boolean, issues: List<Stri
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 issues.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
             }
+        }
+    } else if (hasMissingCards) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.size(8.dp))
+            Text("Legal — missing cards", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Medium)
         }
     } else {
         Row(
