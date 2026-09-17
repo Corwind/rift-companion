@@ -131,6 +131,24 @@ data class DeckBuildUiState(
     val isBuilt: Boolean = false,
 )
 
+data class DisassembleCardInfo(
+    val nameSlug: String,
+    val displayName: String,
+    val quantity: Int,
+    val fromLocation: String,
+    val suggestedDestination: String?,
+)
+
+data class DisassembleUiState(
+    val isLoading: Boolean = false,
+    val cards: List<DisassembleCardInfo> = emptyList(),
+    val availableLocations: List<com.riftcompanion.app.domain.model.LocationPolicy> = emptyList(),
+    val deckLocationName: String = "",
+    val isExecuting: Boolean = false,
+    val isDone: Boolean = false,
+    val error: String? = null,
+)
+
 @HiltViewModel
 class DeckViewModel @Inject constructor(
     private val deckDao: DeckDao,
@@ -152,6 +170,9 @@ class DeckViewModel @Inject constructor(
 
     private val _buildState = MutableStateFlow(DeckBuildUiState())
     val buildState: StateFlow<DeckBuildUiState> = _buildState.asStateFlow()
+
+    private val _disassembleState = MutableStateFlow(DisassembleUiState())
+    val disassembleState: StateFlow<DisassembleUiState> = _disassembleState.asStateFlow()
 
     private var loadDecksJob: kotlinx.coroutines.Job? = null
 
@@ -1187,42 +1208,152 @@ class DeckViewModel @Inject constructor(
      * their original source locations. If overrideLocation is provided,
      * cards go there instead of their original source.
      */
-    fun disassembleDeck(deckId: String, overrideLocation: String? = null) {
+    fun previewDisassemble(deckId: String) {
         viewModelScope.launch {
-            _buildState.value = DeckBuildUiState(isLoading = true)
+            _disassembleState.value = DisassembleUiState(isLoading = true)
             try {
                 val deck = deckDao.getDeck(deckId)
                     ?: throw IllegalArgumentException("Deck not found")
                 val deckLocation = deck.linkedLocationName
                     ?: throw IllegalArgumentException("Deck has no linked location")
                 val entries = deckDao.getEntriesForDeck(deckId)
+                val identities = cardIdentityDao.getAll().first().associateBy { it.nameSlug }
+                val allPrintings = cardPrintingDao.getAll().first().associateBy { it.productID }
 
+                // Get all storage + unavailable locations (potential destinations)
+                val storageLocs = locationPolicyDao.getStorageLocations()
+                val unavailableLocs = locationPolicyDao.getByKind("unavailable")
+                val availableLocations = (storageLocs + unavailableLocs)
+                    .filter { it.name.trim().lowercase() != deckLocation.trim().lowercase() }
+                    .map { e ->
+                        com.riftcompanion.app.domain.model.LocationPolicy(
+                            name = e.name,
+                            displayName = e.displayName,
+                            color = e.color,
+                            icon = e.icon,
+                            kind = com.riftcompanion.app.domain.model.LocationKind.fromStorageValue(e.kind),
+                            countsAsAvailable = e.countsAsAvailable,
+                            hidden = e.hidden,
+                        )
+                    }
+
+                // Get all lines at the deck location
+                val deckLines = inventoryLineDao.getByLocation(deckLocation)
+                val entryNameSlugs = entries.map { it.nameSlug }.toSet()
+
+                // Build card info for each line at the deck location
+                val cards = mutableListOf<DisassembleCardInfo>()
+                val seenSlugs = mutableSetOf<String>()
+
+                // First: cards in the deck definition (with source info)
                 for (entry in entries) {
-                    if (!entry.isBuilt) continue
+                    if (entry.nameSlug in seenSlugs) continue
+                    val linesForCard = deckLines.filter {
+                        allPrintings[it.productId]?.nameSlug == entry.nameSlug
+                    }
+                    if (linesForCard.isEmpty()) continue
+                    val totalQty = linesForCard.sumOf { it.quantity }
+                    if (totalQty <= 0) continue
+                    seenSlugs.add(entry.nameSlug)
+                    val displayName = identities[entry.nameSlug]?.displayName ?: entry.nameSlug
+                    cards.add(DisassembleCardInfo(
+                        nameSlug = entry.nameSlug,
+                        displayName = displayName,
+                        quantity = totalQty,
+                        fromLocation = deckLocation,
+                        suggestedDestination = entry.sourceLocationName,
+                    ))
+                }
 
-                    // Determine where to return the card
-                    val returnLocation = overrideLocation ?: entry.sourceLocationName
-                        ?: "Storage"
+                // Then: cards at the location NOT in the deck definition (removed cards or other cards)
+                for (line in deckLines) {
+                    val nameSlug = allPrintings[line.productId]?.nameSlug ?: continue
+                    if (nameSlug in seenSlugs) continue
+                    if (line.quantity <= 0) continue
+                    seenSlugs.add(nameSlug)
+                    val displayName = identities[nameSlug]?.displayName ?: nameSlug
+                    cards.add(DisassembleCardInfo(
+                        nameSlug = nameSlug,
+                        displayName = displayName,
+                        quantity = line.quantity,
+                        fromLocation = deckLocation,
+                        suggestedDestination = null,
+                    ))
+                }
 
-                    // Find the card in the deck location
-                    val deckLines = inventoryLineDao.getByLocation(deckLocation)
-                        .filter { it.id == entry.nameSlug }
+                _disassembleState.value = DisassembleUiState(
+                    isLoading = false,
+                    cards = cards,
+                    availableLocations = availableLocations,
+                    deckLocationName = deckLocation,
+                )
+            } catch (e: Exception) {
+                _disassembleState.value = DisassembleUiState(error = e.message, isLoading = false)
+            }
+        }
+    }
 
-                    for (line in deckLines) {
-                        // Move back to source/override location
+    fun executeDisassemble(deckId: String, overrides: Map<String, String>) {
+        viewModelScope.launch {
+            _disassembleState.value = _disassembleState.value.copy(isExecuting = true, error = null)
+            try {
+                val deck = deckDao.getDeck(deckId)
+                    ?: throw IllegalArgumentException("Deck not found")
+                val deckLocation = deck.linkedLocationName
+                    ?: throw IllegalArgumentException("Deck has no linked location")
+                val entries = deckDao.getEntriesForDeck(deckId)
+                val allPrintings = cardPrintingDao.getAll().first().associateBy { it.productID }
+
+                // Determine default destination
+                val defaultDest = _disassembleState.value.availableLocations
+                    .firstOrNull()?.name ?: throw IllegalArgumentException("No destination location available")
+
+                // Get all lines at the deck location
+                val deckLines = inventoryLineDao.getByLocation(deckLocation)
+
+                // Group lines by nameSlug
+                val linesBySlug = deckLines.groupBy { allPrintings[it.productId]?.nameSlug ?: "" }
+
+                // Build a map of nameSlug → destination
+                val entrySourceMap = entries.associate { it.nameSlug to (it.sourceLocationName ?: defaultDest) }
+
+                for ((nameSlug, cardLines) in linesBySlug) {
+                    if (nameSlug.isBlank()) continue
+                    val dest = overrides[nameSlug] ?: entrySourceMap[nameSlug] ?: defaultDest
+                    val totalQty = cardLines.sumOf { it.quantity }
+                    if (totalQty <= 0) continue
+
+                    // Check if destination already has a line for this card
+                    val existingDestLine = inventoryLineDao.getLinesByCardSlug(nameSlug)
+                        .find { it.locationName?.trim()?.lowercase() == dest.trim().lowercase() }
+
+                    if (existingDestLine != null) {
+                        inventoryLineDao.updateLocationAndQuantity(
+                            existingDestLine.id,
+                            existingDestLine.locationName,
+                            existingDestLine.quantity + totalQty,
+                        )
+                    } else {
+                        val firstLine = cardLines.first()
+                        val newLineId = "${nameSlug}_${dest.trim().lowercase()}_${System.currentTimeMillis()}"
                         inventoryLineDao.insertAll(listOf(
-                            line.copy(
-                                locationName = returnLocation,
+                            firstLine.copy(
+                                id = newLineId,
+                                locationName = dest,
+                                quantity = totalQty,
                                 updatedAt = System.currentTimeMillis().toString(),
                             ),
                         ))
-                        // Remove from deck location
-                        inventoryLineDao.updateLocationAndQuantity(line.id, deckLocation, 0)
+                    }
+
+                    // Remove from deck location
+                    for (line in cardLines) {
+                        inventoryLineDao.updateLocationAndQuantity(line.id, line.locationName, 0)
                     }
                 }
 
                 // Mark entries as not built
-                val updatedEntries = entries.map { it.copy(isBuilt = false) }
+                val updatedEntries = entries.map { it.copy(isBuilt = false, sourceLocationName = null) }
                 deckDao.deleteEntriesForDeck(deckId)
                 deckDao.insertEntries(updatedEntries)
 
@@ -1232,10 +1363,10 @@ class DeckViewModel @Inject constructor(
                     updatedAt = System.currentTimeMillis(),
                 ))
 
-                _buildState.value = DeckBuildUiState(isLoading = false)
+                _disassembleState.value = _disassembleState.value.copy(isExecuting = false, isDone = true)
                 loadDecks()
             } catch (e: Exception) {
-                _buildState.value = DeckBuildUiState(error = e.message, isLoading = false)
+                _disassembleState.value = _disassembleState.value.copy(isExecuting = false, error = e.message)
             }
         }
     }

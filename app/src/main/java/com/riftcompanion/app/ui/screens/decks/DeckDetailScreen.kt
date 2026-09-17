@@ -101,6 +101,7 @@ fun DeckDetailScreen(
     onBack: () -> Unit,
     onCardClick: (String) -> Unit = {},
     onBuildDeck: (String) -> Unit = {},
+    onDisassembleDeck: (String) -> Unit = {},
     viewModel: DeckViewModel = hiltViewModel(),
 ) {
     val detailState by viewModel.deckDetailState.collectAsStateWithLifecycle()
@@ -434,15 +435,10 @@ fun DeckDetailScreen(
     }
 
     if (showDisassembleDialog) {
-        AlertDialog(
-            onDismissRequest = { showDisassembleDialog = false },
-            title = { Text("Disassemble deck") },
-            text = { Text("Cards will be returned to their original storage locations. Continue?") },
-            confirmButton = {
-                TextButton(onClick = { viewModel.disassembleDeck(deckId); showDisassembleDialog = false }) { Text("Disassemble") }
-            },
-            dismissButton = { TextButton(onClick = { showDisassembleDialog = false }) { Text("Cancel") } },
-        )
+        LaunchedEffect(Unit) {
+            onDisassembleDeck(deckId)
+            showDisassembleDialog = false
+        }
     }
 
     if (showAddCardSheet) {
