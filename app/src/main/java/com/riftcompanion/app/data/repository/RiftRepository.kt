@@ -482,6 +482,7 @@ class RiftRepository @Inject constructor(
                 printingCount = cardPrintings.size,
                 expansionSlugs = cardPrintings.mapNotNull { it.expansionSlug }.distinct(),
                 rarities = cardPrintings.mapNotNull { it.rarity }.distinct(),
+                totalOwned = availability.totalOwned,
             )
         }
     }
