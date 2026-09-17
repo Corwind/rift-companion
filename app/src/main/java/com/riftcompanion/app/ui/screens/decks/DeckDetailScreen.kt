@@ -33,6 +33,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
@@ -159,14 +160,56 @@ fun DeckDetailScreen(
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
             }
-            Text(
-                text = detailState.deck?.name ?: "Deck",
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
+            val deckName = detailState.deck?.name ?: "Deck"
+            var editName by remember(deckName) { mutableStateOf(deckName) }
+            if (isEditing && detailState.deck != null) {
+                androidx.compose.foundation.text.BasicTextField(
+                    value = editName,
+                    onValueChange = { editName = it },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.headlineSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    ),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = {
+                    viewModel.saveDeck(deckId, editName) {
+                        isEditing = false
+                    }
+                }) {
+                    Icon(Icons.Default.Check, contentDescription = "Save deck", tint = MaterialTheme.colorScheme.primary)
+                }
+            } else {
+                Text(
+                    text = deckName,
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+            }
             val deck = detailState.deck
             val deckBuilt = deck?.isBuilt == true
+            // Edit toggle
+            IconButton(onClick = {
+                if (isEditing) {
+                    // Exiting edit mode = discard changes
+                    viewModel.discardEdits(deckId) {
+                        isEditing = false
+                    }
+                } else {
+                    // Entering edit mode = snapshot current state
+                    viewModel.beginEditSession(deckId)
+                    isEditing = true
+                }
+            }) {
+                Icon(
+                    if (isEditing) Icons.Default.Close else Icons.Default.Edit,
+                    contentDescription = if (isEditing) "Done editing" else "Edit deck",
+                    tint = if (isEditing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                )
+            }
             // Build status / Disassemble
             if (deck != null) {
                 if (deckBuilt) {
@@ -193,14 +236,6 @@ fun DeckDetailScreen(
                         )
                     }
                 }
-            }
-            // Edit toggle
-            IconButton(onClick = { isEditing = !isEditing }) {
-                Icon(
-                    if (isEditing) Icons.Default.Close else Icons.Default.Edit,
-                    contentDescription = if (isEditing) "Done editing" else "Edit deck",
-                    tint = if (isEditing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                )
             }
             // View toggle
             IconButton(onClick = { gridMode = !gridMode }) {
