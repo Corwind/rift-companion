@@ -184,6 +184,15 @@ private fun BuildPreviewContent(
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.weight(1f),
                 )
+                if (preview.returns.isNotEmpty()) {
+                    SummaryChip(
+                        label = "Returns",
+                        value = "${preview.returns.size}",
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 SummaryChip(
                     label = "Missing",
                     value = "${preview.missing.size}",
@@ -198,7 +207,7 @@ private fun BuildPreviewContent(
         if (preview.movements.isNotEmpty()) {
             item {
                 Text(
-                    "Card Movements",
+                    "Card Movements (Storage → Deck)",
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
@@ -206,6 +215,21 @@ private fun BuildPreviewContent(
             }
             items(preview.movements) { movement ->
                 MovementCard(movement)
+            }
+        }
+
+        // Returns section
+        if (preview.returns.isNotEmpty()) {
+            item {
+                Text(
+                    "Returns (Deck → Storage)",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                )
+            }
+            items(preview.returns) { returnMovement ->
+                ReturnCard(returnMovement)
             }
         }
 
@@ -321,6 +345,34 @@ private fun MissingCardRow(missing: MissingCard) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReturnCard(returnMovement: CardMovement) {
+    ThemedCardSurface(modifier = Modifier.fillMaxWidth(), cornerRadius = 10) {
+        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "${returnMovement.quantity}× ${returnMovement.displayName}",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                    Text(
+                        text = returnMovement.fromLocation,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(14.dp).padding(start = 4.dp))
+                    Text(
+                        text = returnMovement.toLocation,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
             }
         }
     }
