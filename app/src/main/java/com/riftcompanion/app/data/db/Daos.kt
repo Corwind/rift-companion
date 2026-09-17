@@ -137,13 +137,13 @@ interface LocationPolicyDao {
     @Query("SELECT * FROM location_policies WHERE name = :name")
     suspend fun get(name: String): LocationPolicyEntity?
 
-    @Query("SELECT * FROM location_policies WHERE kind = :kind")
+    @Query("SELECT * FROM location_policies WHERE kind = :kind AND hidden = 0")
     suspend fun getByKind(kind: String): List<LocationPolicyEntity>
 
     @Query("SELECT * FROM location_policies WHERE kind != 'unavailable' AND hidden = 0")
     suspend fun getVisibleNonUnavailable(): List<LocationPolicyEntity>
 
-    @Query("SELECT * FROM location_policies WHERE kind = 'storage'")
+    @Query("SELECT * FROM location_policies WHERE kind = 'storage' AND hidden = 0")
     suspend fun getStorageLocations(): List<LocationPolicyEntity>
 
     @Query("SELECT * FROM location_policies WHERE name = :name LIMIT 1")
