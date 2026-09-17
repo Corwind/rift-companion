@@ -58,6 +58,7 @@ import com.riftcompanion.app.ui.components.gradientBackground
 import com.riftcompanion.app.ui.screens.carddetail.CardDetailScreen
 import com.riftcompanion.app.ui.screens.catalogue.CatalogueScreen
 import com.riftcompanion.app.ui.screens.decks.DeckBuildScreen
+import com.riftcompanion.app.ui.screens.decks.DeckDisassembleScreen
 import com.riftcompanion.app.ui.screens.decks.DeckDetailScreen
 import com.riftcompanion.app.ui.screens.rules.RulesSearchScreen
 import com.riftcompanion.app.ui.screens.decks.DeckFromLocationScreen
@@ -318,6 +319,9 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                             onBuildDeck = { id ->
                                 navController.navigate("deckBuild/$id")
                             },
+                            onDisassembleDeck = { id ->
+                                navController.navigate("deckDisassemble/$id")
+                            },
                         )
                     }
                     composable("deckBuild/{deckId}") { backStackEntry ->
@@ -326,6 +330,16 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                             deckId = deckId,
                             onBack = { navController.popBackStack() },
                             onBuilt = {
+                                navController.popBackStack()
+                            },
+                        )
+                    }
+                    composable("deckDisassemble/{deckId}") { backStackEntry ->
+                        val deckId = backStackEntry.arguments?.getString("deckId") ?: ""
+                        DeckDisassembleScreen(
+                            deckId = deckId,
+                            onBack = { navController.popBackStack() },
+                            onDone = {
                                 navController.popBackStack()
                             },
                         )
