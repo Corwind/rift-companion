@@ -145,6 +145,10 @@ object DeckBuildPlanner {
         // ── Phase 1.5: Compute returns per card slug (excess at deck location) ──
         // Returns are computed per slug, not per entry, to avoid double-counting
         // when a card appears in multiple zones (e.g. main + sideboard).
+        // Only compute returns when the deck was previously built — if the deck
+        // was imported from a location, extra cards at that location are just
+        // other cards stored there, not excess from a previous build.
+        if (isAlreadyBuilt) {
         for (nameSlug in entryNameSlugs) {
             val totalAtDeck = linesAtDeckBySlug[nameSlug]?.sumOf { it.quantity } ?: 0
             val totalNeeded = totalNeededBySlug[nameSlug] ?: 0
@@ -181,6 +185,7 @@ object DeckBuildPlanner {
                     ))
                 }
             }
+        }
         }
 
         // ── Phase 2: Find cards at deck location not in deck definition (removed cards) ──
