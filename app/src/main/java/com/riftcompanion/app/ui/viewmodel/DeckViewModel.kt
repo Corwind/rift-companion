@@ -911,6 +911,7 @@ class DeckViewModel @Inject constructor(
                 val storageDisplayNames = storageLocs.associate { it.name.trim().lowercase() to it.displayName }
 
                 // Gather all inventory lines for cards in the deck
+                val entryNameSlugs = entries.map { it.nameSlug }.toSet()
                 val linesForEntries = entries.flatMap { entry ->
                     inventoryLineDao.getLinesByCardSlug(entry.nameSlug).map { line ->
                         DeckBuildPlanner.LineInfo(
@@ -920,15 +921,14 @@ class DeckViewModel @Inject constructor(
                         )
                     }
                 }
-                // Also get lines at the deck location for removed cards
+                // Also get lines at the deck location for cards NOT in the deck (removed cards)
                 val linesAtDeckLoc = inventoryLineDao.getByLocation(deckLocationName)
                     .mapNotNull { line ->
                         val nameSlug = allPrintings[line.productId]?.nameSlug ?: return@mapNotNull null
+                        if (nameSlug in entryNameSlugs) return@mapNotNull null // already in linesForEntries
                         DeckBuildPlanner.LineInfo(nameSlug, line.locationName ?: "", line.quantity)
                     }
-                // Merge and dedup
-                val allLines = (linesForEntries + linesAtDeckLoc)
-                    .distinctBy { it.nameSlug + "_" + it.locationName }
+                val allLines = linesForEntries + linesAtDeckLoc
 
                 // Build entry infos for the planner
                 val entryInfos = entries.map { entry ->

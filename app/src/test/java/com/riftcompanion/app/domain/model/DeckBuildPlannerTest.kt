@@ -33,6 +33,24 @@ class DeckBuildPlannerTest {
     // ── Never-built deck ──
 
     @Test
+    fun `never-built deck with cards already at deck location counts them as available`() {
+        // Deck state is "planned" but cards are physically at the deck location
+        // (e.g. deck was built, edited, state reverted, but cards not moved back)
+        val plan = DeckBuildPlanner.computePlan(
+            entries = listOf(entry("card-a", qty = 3)),
+            lines = listOf(line("card-a", "Vi Deck", 3)),
+            storageLocations = storage,
+            deckLocationName = deckLoc,
+            deckLocationDisplayName = deckDisplay,
+            storageDisplayNames = storageDisplay,
+            isAlreadyBuilt = false,
+        )
+        assertTrue(plan.movements.isEmpty())
+        assertTrue(plan.returns.isEmpty())
+        assertTrue(plan.missing.isEmpty())
+    }
+
+    @Test
     fun `never-built deck moves all cards from storage`() {
         val plan = DeckBuildPlanner.computePlan(
             entries = listOf(entry("card-a", qty = 3)),
@@ -234,6 +252,88 @@ class DeckBuildPlannerTest {
         assertEquals("Vi Deck", plan.returns[0].fromLocation)
 
         assertTrue(plan.missing.isEmpty())
+    }
+
+    @Test
+    fun `planned deck with cards at deck location and shortfall in storage`() {
+        // Deck was built with 3, edited to need 5, state reverted to planned
+        // 3 at deck + 2 in storage = 5, no missing
+        val plan = DeckBuildPlanner.computePlan(
+            entries = listOf(entry("card-a", qty = 5, source = "Red Box")),
+            lines = listOf(
+                line("card-a", "Vi Deck", 3),
+                line("card-a", "Red Box", 2),
+            ),
+            storageLocations = storage,
+            deckLocationName = deckLoc,
+            deckLocationDisplayName = deckDisplay,
+            storageDisplayNames = storageDisplay,
+            isAlreadyBuilt = false,
+        )
+        assertEquals(1, plan.movements.size)
+        assertEquals(2, plan.movements[0].quantity)
+        assertTrue(plan.returns.isEmpty())
+        assertTrue(plan.missing.isEmpty())
+    }
+
+    @Test
+    fun `planned deck with cards at deck location and insufficient storage shows missing`() {
+        // 3 at deck + 1 in storage = 4, need 5 → 1 missing
+        val plan = DeckBuildPlanner.computePlan(
+            entries = listOf(entry("card-a", qty = 5, source = "Red Box")),
+            lines = listOf(
+                line("card-a", "Vi Deck", 3),
+                line("card-a", "Red Box", 1),
+            ),
+            storageLocations = storage,
+            deckLocationName = deckLoc,
+            deckLocationDisplayName = deckDisplay,
+            storageDisplayNames = storageDisplay,
+            isAlreadyBuilt = false,
+        )
+        assertEquals(1, plan.movements.size)
+        assertEquals(1, plan.movements[0].quantity)
+        assertEquals(1, plan.missing.size)
+        assertEquals(5, plan.missing[0].needed)
+        assertEquals(4, plan.missing[0].available)
+    }
+
+    @Test
+    fun `planned deck with removed card at deck location does not return it`() {
+        // card-b was removed from deck definition but is still at deck location.
+        // Since deck is not built (imported from location), don't return it —
+        // it might be another card stored there.
+        val plan = DeckBuildPlanner.computePlan(
+            entries = listOf(entry("card-a", qty = 3)),
+            lines = listOf(
+                line("card-a", "Vi Deck", 3),
+                line("card-b", "Vi Deck", 2),
+            ),
+            storageLocations = storage,
+            deckLocationName = deckLoc,
+            deckLocationDisplayName = deckDisplay,
+            storageDisplayNames = storageDisplay,
+            isAlreadyBuilt = false,
+        )
+        assertTrue(plan.movements.isEmpty())
+        assertTrue(plan.returns.isEmpty())
+        assertTrue(plan.missing.isEmpty())
+    }
+
+    @Test
+    fun `planned deck with reduced quantity returns excess even when not marked built`() {
+        val plan = DeckBuildPlanner.computePlan(
+            entries = listOf(entry("card-a", qty = 2, source = "Red Box")),
+            lines = listOf(line("card-a", "Vi Deck", 5)),
+            storageLocations = storage,
+            deckLocationName = deckLoc,
+            deckLocationDisplayName = deckDisplay,
+            storageDisplayNames = storageDisplay,
+            isAlreadyBuilt = false,
+        )
+        assertTrue(plan.movements.isEmpty())
+        assertEquals(1, plan.returns.size)
+        assertEquals(3, plan.returns[0].quantity)
     }
 
     // ── Runes and battlefields ──
