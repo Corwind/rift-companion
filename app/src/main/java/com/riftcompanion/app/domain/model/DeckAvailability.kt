@@ -20,6 +20,7 @@ object DeckAvailability {
 
     data class Result(
         val availableInStorage: Int,
+        val inDeckLocation: Int,
         val inOtherDecks: Int,
         val totalOwned: Int,
         val isMissing: Boolean,
@@ -72,7 +73,8 @@ object DeckAvailability {
         val missing = if (isRuneOrBattlefield) 0 else maxOf(0, quantity - availableTotal)
 
         return Result(
-            availableInStorage = if (isRuneOrBattlefield) quantity else inStorage + inDeckLocation,
+            availableInStorage = if (isRuneOrBattlefield) quantity else inStorage,
+            inDeckLocation = if (isRuneOrBattlefield) quantity else inDeckLocation,
             inOtherDecks = if (isRuneOrBattlefield) 0 else inDecks,
             totalOwned = if (isRuneOrBattlefield) quantity else total,
             isMissing = missing > 0,
