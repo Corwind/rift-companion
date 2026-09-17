@@ -96,8 +96,8 @@ object DeckBuildPlanner {
 
             if (isRuneOrBattlefield) {
                 // Runes/battlefields are created at the deck location, never missing
-                // If already built and excess at deck, return to source or delete
-                if (isAlreadyBuilt && atDeck > needed) {
+                // If excess at deck, return to source or delete
+                if (atDeck > needed) {
                     val returnQty = atDeck - needed
                     val returnTo = entry.sourceLocationName?.trim()?.lowercase()
                     if (returnTo != null && returnTo in storageLocations) {
@@ -115,26 +115,28 @@ object DeckBuildPlanner {
             }
 
             // Non-rune/battlefield card
-            if (isAlreadyBuilt) {
-                // Return excess to source location
-                if (atDeck > needed) {
-                    val returnQty = atDeck - needed
-                    val returnToNorm = entry.sourceLocationName?.trim()?.lowercase()
-                        ?: defaultStorage
-                    if (returnToNorm != null) {
-                        returns.add(Movement(
-                            nameSlug = entry.nameSlug,
-                            displayName = entry.displayName,
-                            quantity = returnQty,
-                            fromLocation = deckLocationDisplayName,
-                            toLocation = storageDisplayNames[returnToNorm] ?: returnToNorm,
-                        ))
-                    }
+            // Return excess to source location (works even if state was reverted,
+            // since cards may still be physically at the deck location)
+            if (atDeck > needed) {
+                val returnQty = atDeck - needed
+                val returnToNorm = entry.sourceLocationName?.trim()?.lowercase()
+                    ?: defaultStorage
+                if (returnToNorm != null) {
+                    returns.add(Movement(
+                        nameSlug = entry.nameSlug,
+                        displayName = entry.displayName,
+                        quantity = returnQty,
+                        fromLocation = deckLocationDisplayName,
+                        toLocation = storageDisplayNames[returnToNorm] ?: returnToNorm,
+                    ))
                 }
             }
 
             // Compute shortfall that needs to be moved from storage
-            val shortfall = if (isAlreadyBuilt) maxOf(0, needed - atDeck) else needed
+            // Always count cards already at the deck location, even if deck state
+            // is "planned" (e.g. deck was built, edited, state reverted, but cards
+            // are still physically at the deck location).
+            val shortfall = maxOf(0, needed - atDeck)
             var remaining = shortfall
             for (line in storageLines) {
                 if (remaining <= 0) break
@@ -162,16 +164,17 @@ object DeckBuildPlanner {
         }
 
         // ── Phase 2: Find cards at deck location not in deck definition (removed cards) ──
+        // Only return removed cards when the deck was previously built (assembled),
+        // not when imported from a location (other cards may be stored there).
         if (isAlreadyBuilt) {
             for ((nameSlug, cardLines) in linesAtDeckBySlug) {
                 if (nameSlug !in entryNameSlugs) {
                     val totalQty = cardLines.sumOf { it.quantity }
                     if (totalQty > 0) {
-                        // Return to default storage (we don't know the original source)
                         val returnTo = defaultStorage ?: "unlocated"
                         returns.add(Movement(
                             nameSlug = nameSlug,
-                            displayName = nameSlug, // we don't have display name for removed cards
+                            displayName = nameSlug,
                             quantity = totalQty,
                             fromLocation = deckLocationDisplayName,
                             toLocation = storageDisplayNames[returnTo] ?: defaultStorageDisplay,
