@@ -184,7 +184,7 @@ fun CardDetailScreen(
                         identity.energyCost?.let { StatCard("Energy", it.toString(), Icons.Default.Bolt) }
                         // Might is a strength stat for units only, spells don't have it
                         if (isUnit) {
-                            identity.mightCost?.let { StatCard("Might", it.toString(), Icons.Default.FitnessCenter) }
+                            identity.might?.let { StatCard("Might", it.toString(), Icons.Default.FitnessCenter) }
                         }
                         identity.attributes.firstDisplayValue(listOf("power", "attack", "strength"))?.let { StatCard("Power", it, Icons.Default.Shield) }
                         identity.attributes.firstDisplayValue(listOf("health", "hp"))?.let { StatCard("Health", it, Icons.Default.Shield) }

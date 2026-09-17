@@ -26,7 +26,7 @@ object EntityConverter {
             domainsCsv = identity.domains.joinToString(","),
             tagsCsv = identity.tags.joinToString(","),
             energyCost = identity.energyCost,
-            mightCost = identity.mightCost,
+            might = identity.might,
             attributesJson = json.encodeToString(JsonValue.serializer(), JsonValue.Obj(identity.attributes)),
         )
     }
@@ -47,7 +47,7 @@ object EntityConverter {
             domains = if (entity.domainsCsv.isBlank()) emptyList() else entity.domainsCsv.split(","),
             tags = if (entity.tagsCsv.isBlank()) emptyList() else entity.tagsCsv.split(","),
             energyCost = entity.energyCost,
-            mightCost = entity.mightCost,
+            might = entity.might,
             attributes = attributes,
         )
     }

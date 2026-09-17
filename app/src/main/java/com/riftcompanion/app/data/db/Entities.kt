@@ -16,7 +16,7 @@ data class CardIdentityEntity(
     val domainsCsv: String,      // comma-separated
     val tagsCsv: String,          // comma-separated
     val energyCost: Int?,
-    val mightCost: Int?,
+    val might: Int?,
     val attributesJson: String,  // JSON string
 )
 
