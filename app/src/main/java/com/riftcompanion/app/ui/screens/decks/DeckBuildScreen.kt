@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -140,9 +141,11 @@ private fun BuildPreviewContent(
     onBack: () -> Unit,
 ) {
     val hasMissing = preview.missing.isNotEmpty()
+    val isAlreadyBuilt = preview.isAlreadyBuilt
 
+    Column(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.weight(1f),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -159,9 +162,9 @@ private fun BuildPreviewContent(
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Text(
-                            text = if (preview.isNewLocation) "New location will be created" else "Existing location",
+                            text = if (preview.isNewLocation) "New location will be created" else if (isAlreadyBuilt) "Deck is already built" else "Existing location",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (isAlreadyBuilt) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -222,15 +225,15 @@ private fun BuildPreviewContent(
         }
 
         // Bottom spacer
-        item { Spacer(Modifier.height(100.dp)) }
+        item { Spacer(Modifier.height(16.dp)) }
     }
 
     // Build button
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 88.dp),
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Button(
@@ -248,9 +251,10 @@ private fun BuildPreviewContent(
             } else {
                 Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.size(8.dp))
-                Text(if (hasMissing) "Can't build (missing)" else "Build Deck")
+                Text(if (hasMissing) "Can't build (missing)" else if (isAlreadyBuilt) "Rebuild" else "Build Deck")
             }
         }
+    }
     }
 }
 
