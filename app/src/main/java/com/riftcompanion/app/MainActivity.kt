@@ -57,6 +57,7 @@ import com.riftcompanion.app.security.BiometricHelper
 import com.riftcompanion.app.ui.components.gradientBackground
 import com.riftcompanion.app.ui.screens.carddetail.CardDetailScreen
 import com.riftcompanion.app.ui.screens.catalogue.CatalogueScreen
+import com.riftcompanion.app.ui.screens.decks.DeckBuildScreen
 import com.riftcompanion.app.ui.screens.decks.DeckDetailScreen
 import com.riftcompanion.app.ui.screens.rules.RulesSearchScreen
 import com.riftcompanion.app.ui.screens.decks.DeckFromLocationScreen
@@ -313,6 +314,19 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                             onBack = { navController.popBackStack() },
                             onCardClick = { nameSlug ->
                                 navController.navigate("cardDetail/$nameSlug/false")
+                            },
+                            onBuildDeck = { id ->
+                                navController.navigate("deckBuild/$id")
+                            },
+                        )
+                    }
+                    composable("deckBuild/{deckId}") { backStackEntry ->
+                        val deckId = backStackEntry.arguments?.getString("deckId") ?: ""
+                        DeckBuildScreen(
+                            deckId = deckId,
+                            onBack = { navController.popBackStack() },
+                            onBuilt = {
+                                navController.popBackStack()
                             },
                         )
                     }

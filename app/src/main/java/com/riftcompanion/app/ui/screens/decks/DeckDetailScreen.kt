@@ -100,6 +100,7 @@ fun DeckDetailScreen(
     deckId: String,
     onBack: () -> Unit,
     onCardClick: (String) -> Unit = {},
+    onBuildDeck: (String) -> Unit = {},
     viewModel: DeckViewModel = hiltViewModel(),
 ) {
     val detailState by viewModel.deckDetailState.collectAsStateWithLifecycle()
@@ -107,7 +108,6 @@ fun DeckDetailScreen(
 
     LaunchedEffect(deckId) { viewModel.loadDeckDetail(deckId) }
 
-    var showBuildPreview by remember { mutableStateOf(false) }
     var showDisassembleDialog by remember { mutableStateOf(false) }
     var gridMode by remember { mutableStateOf(false) }
     var showAddCardSheet by remember { mutableStateOf(false) }
@@ -226,7 +226,7 @@ fun DeckDetailScreen(
                 } else {
                     // Not built: show build icon
                     IconButton(
-                        onClick = { viewModel.previewBuild(deckId); showBuildPreview = true },
+                        onClick = { onBuildDeck(deckId) },
                         enabled = deck.isLegal && !deck.hasMissingCards,
                     ) {
                         Icon(
@@ -424,21 +424,9 @@ fun DeckDetailScreen(
         )
     }
 
-    // Build preview dialog
-    if (showBuildPreview) {
-        buildState.preview?.let { preview ->
-            BuildPreviewDialog(
-                preview = preview,
-                isLoading = buildState.isLoading,
-                onBuild = { viewModel.executeBuild() },
-                onDismiss = { showBuildPreview = false; viewModel.clearBuildState() },
-            )
-        }
-    }
-
+    // Build is now handled by DeckBuildScreen — no popup dialog needed
     if (buildState.isBuilt) {
         LaunchedEffect(Unit) {
-            showBuildPreview = false
             viewModel.clearBuildState()
             viewModel.loadDeckDetail(deckId)
             isEditing = false
@@ -919,47 +907,6 @@ private fun LegalityBanner(isLegal: Boolean, isBuilt: Boolean, hasMissingCards: 
             }
         }
     }
-}
-
-@Composable
-private fun BuildPreviewDialog(
-    preview: DeckBuildPreview,
-    isLoading: Boolean,
-    onBuild: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Build \"${preview.deckName}\"") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    if (preview.isNewLocation) "A new location \"${preview.deckLocationName}\" will be created."
-                    else "Cards will be moved to \"${preview.deckLocationName}\".",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                if (preview.movements.isNotEmpty()) {
-                    Text("Card movements:", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                    preview.movements.take(10).forEach { m ->
-                        Text("• ${m.quantity}× ${m.displayName} ← ${m.fromLocation}", style = MaterialTheme.typography.bodySmall)
-                    }
-                    if (preview.movements.size > 10) Text("… and ${preview.movements.size - 10} more", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                if (preview.missing.isNotEmpty()) {
-                    Spacer(Modifier.height(4.dp))
-                    Text("Missing cards:", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
-                    preview.missing.forEach { m ->
-                        Text("• ${m.displayName}: need ${m.needed}, have ${m.available}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            if (isLoading) { CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp) }
-            else { TextButton(onClick = onBuild, enabled = preview.missing.isEmpty()) { Text(if (preview.missing.isEmpty()) "Build" else "Can't build (missing cards)") } }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
