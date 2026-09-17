@@ -59,6 +59,7 @@ import com.riftcompanion.app.ui.screens.carddetail.CardDetailScreen
 import com.riftcompanion.app.ui.screens.catalogue.CatalogueScreen
 import com.riftcompanion.app.ui.screens.decks.DeckBuildScreen
 import com.riftcompanion.app.ui.screens.decks.DeckDisassembleScreen
+import com.riftcompanion.app.ui.screens.decks.DeckStatsScreen
 import com.riftcompanion.app.ui.screens.decks.DeckDetailScreen
 import com.riftcompanion.app.ui.screens.rules.RulesSearchScreen
 import com.riftcompanion.app.ui.screens.decks.DeckFromLocationScreen
@@ -322,6 +323,9 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                             onDisassembleDeck = { id ->
                                 navController.navigate("deckDisassemble/$id")
                             },
+                            onViewStats = { id ->
+                                navController.navigate("deckStats/$id")
+                            },
                         )
                     }
                     composable("deckBuild/{deckId}") { backStackEntry ->
@@ -342,6 +346,13 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                             onDone = {
                                 navController.popBackStack()
                             },
+                        )
+                    }
+                    composable("deckStats/{deckId}") { backStackEntry ->
+                        val deckId = backStackEntry.arguments?.getString("deckId") ?: ""
+                        DeckStatsScreen(
+                            deckId = deckId,
+                            onBack = { navController.popBackStack() },
                         )
                     }
                 }

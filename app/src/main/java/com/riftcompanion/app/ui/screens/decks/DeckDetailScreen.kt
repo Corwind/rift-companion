@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -102,6 +103,7 @@ fun DeckDetailScreen(
     onCardClick: (String) -> Unit = {},
     onBuildDeck: (String) -> Unit = {},
     onDisassembleDeck: (String) -> Unit = {},
+    onViewStats: (String) -> Unit = {},
     viewModel: DeckViewModel = hiltViewModel(),
 ) {
     val detailState by viewModel.deckDetailState.collectAsStateWithLifecycle()
@@ -237,6 +239,14 @@ fun DeckDetailScreen(
                         )
                     }
                 }
+            }
+            // Stats button
+            IconButton(onClick = { onViewStats(deckId) }) {
+                Icon(
+                    Icons.Default.Analytics,
+                    contentDescription = "Deck stats",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
             }
             // View toggle
             IconButton(onClick = { gridMode = !gridMode }) {
