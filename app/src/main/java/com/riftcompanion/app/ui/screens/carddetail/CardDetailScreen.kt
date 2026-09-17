@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -236,6 +237,7 @@ fun CardDetailScreen(
                     LocationSection(
                         cardLocations = card.locations,
                         editableLocations = uiState.locationsForEditing,
+                        locationDrafts = uiState.locationDrafts,
                         isEditing = uiState.isEditingLocations,
                         isSaving = uiState.isSavingLocations,
                         saveError = uiState.saveError,
@@ -253,6 +255,7 @@ fun CardDetailScreen(
                         },
                         onDecrement = { locName -> viewModel.setDraftQuantity(locName, viewModel.getDraftQuantity(locName) - 1) },
                         onIncrement = { locName -> viewModel.setDraftQuantity(locName, viewModel.getDraftQuantity(locName) + 1) },
+                        onAddLocation = { locName, qty -> viewModel.setDraftQuantity(locName, qty) },
                         onSave = { viewModel.saveLocationEdits() },
                     )
                 }
@@ -282,6 +285,7 @@ fun CardDetailScreen(
 private fun LocationSection(
     cardLocations: List<com.riftcompanion.app.domain.model.LocationQuantity>,
     editableLocations: List<LocationPolicy>,
+    locationDrafts: Map<String, Int>,
     isEditing: Boolean,
     isSaving: Boolean,
     saveError: String?,
@@ -293,8 +297,20 @@ private fun LocationSection(
     onCancel: () -> Unit,
     onDecrement: (String) -> Unit,
     onIncrement: (String) -> Unit,
+    onAddLocation: (String, Int) -> Unit,
     onSave: () -> Unit,
 ) {
+    // Locations where the card already exists (original qty > 0)
+    val existingLocationNames = cardLocations.map { it.locationName }.toSet()
+    // Draft locations that may not be in cardLocations yet
+    val draftLocationNames = locationDrafts.keys
+    // Visible = existing + drafted
+    val visibleLocationNames = existingLocationNames + draftLocationNames
+    val visibleLocations = editableLocations.filter { it.name in visibleLocationNames }
+    val addableLocations = editableLocations.filter { it.name !in visibleLocationNames && it.name != "Unlocated" }
+
+    var showAddLocationDialog by remember { mutableStateOf(false) }
+
     ThemedCardSurface(cornerRadius = 12) {
         Column(modifier = Modifier.padding(14.dp)) {
             // Title + edit controls on the same line
@@ -345,8 +361,8 @@ private fun LocationSection(
             }
 
             if (isEditing) {
-            // Show all editable locations with controls
-            editableLocations.forEach { location ->
+            // Show only locations where card exists or has been drafted
+            visibleLocations.forEach { location ->
                 val originalQty = cardLocations.filter { it.locationName == location.name }.sumOf { it.quantity }
                 val draftQty = getDraftQuantity(location.name)
                 val isReadOnly = location.name == "Unlocated"
@@ -364,6 +380,32 @@ private fun LocationSection(
                     onIncrement = { onIncrement(location.name) },
                 )
                 Spacer(Modifier.height(4.dp))
+            }
+            // Add to location button
+            if (addableLocations.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { showAddLocationDialog = true }
+                        .padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = "Add to location",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
         } else {
             // Display mode: show only locations with quantity > 0
@@ -388,6 +430,18 @@ private fun LocationSection(
                 }
             }
         }
+    }
+
+    if (showAddLocationDialog) {
+        AddLocationDialog(
+            cardName = cardLocations.firstOrNull()?.displayName ?: "Card",
+            availableLocations = addableLocations,
+            onDismiss = { showAddLocationDialog = false },
+            onConfirm = { locationName, quantity ->
+                onAddLocation(locationName, quantity)
+                showAddLocationDialog = false
+            },
+        )
     }
 }
 }
@@ -534,4 +588,85 @@ private fun MetadataRow(title: String, value: String?) {
             Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
         }
     }
+}
+
+@Composable
+private fun AddLocationDialog(
+    cardName: String,
+    availableLocations: List<LocationPolicy>,
+    onDismiss: () -> Unit,
+    onConfirm: (String, Int) -> Unit,
+) {
+    var selectedLocation by remember { mutableStateOf(availableLocations.firstOrNull()) }
+    var quantityText by remember { mutableStateOf("1") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add to location") },
+        text = {
+            Column {
+                Text(
+                    text = cardName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+
+                Text(
+                    text = "Location",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(4.dp))
+                availableLocations.forEach { location ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { selectedLocation = location }
+                            .padding(vertical = 6.dp, horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        androidx.compose.material3.RadioButton(
+                            selected = selectedLocation == location,
+                            onClick = { selectedLocation = location },
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = location.displayName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+
+                Text(
+                    text = "Quantity",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(4.dp))
+                androidx.compose.material3.OutlinedTextField(
+                    value = quantityText,
+                    onValueChange = { quantityText = it.filter { c -> c.isDigit() } },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val loc = selectedLocation
+                    val qty = quantityText.toIntOrNull() ?: 0
+                    if (loc != null && qty > 0) {
+                        onConfirm(loc.name, qty)
+                    }
+                },
+                enabled = selectedLocation != null && (quantityText.toIntOrNull() ?: 0) > 0,
+            ) { Text("Add") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
