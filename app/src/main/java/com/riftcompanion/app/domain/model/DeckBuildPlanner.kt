@@ -78,13 +78,25 @@ object DeckBuildPlanner {
             .filter { it.locationName.trim().lowercase() == deckLocNorm }
             .groupBy { it.nameSlug }
 
-        // ── Phase 1: Process each deck entry ──
+        // Total quantity needed per card across all zones (to avoid double-counting)
+        val totalNeededBySlug = entries.groupBy { it.nameSlug }
+            .mapValues { (_, entryList) -> entryList.sumOf { it.quantity } }
+
+        // Track how many cards at deck location have been "consumed" by entries
+        val atDeckConsumed = mutableMapOf<String, Int>()
+
+        // ── Phase 1: Process each deck entry (movements + missing only) ──
         for (entry in entries) {
             val isRuneOrBattlefield = entry.zone == DeckZone.rune || entry.zone == DeckZone.battlefield
             val needed = entry.quantity
 
-            // Cards already at the deck location
-            val atDeck = linesAtDeckBySlug[entry.nameSlug]?.sumOf { it.quantity } ?: 0
+            // Total cards of this slug at the deck location
+            val totalAtDeck = linesAtDeckBySlug[entry.nameSlug]?.sumOf { it.quantity } ?: 0
+            // How many at deck have already been consumed by previous entries
+            val consumed = atDeckConsumed[entry.nameSlug] ?: 0
+            // Available at deck for this entry: remaining after previous entries consumed their share
+            val atDeck = minOf(needed, maxOf(0, totalAtDeck - consumed))
+            atDeckConsumed[entry.nameSlug] = consumed + atDeck
 
             // Cards in storage
             val storageLines = lines
@@ -96,40 +108,7 @@ object DeckBuildPlanner {
 
             if (isRuneOrBattlefield) {
                 // Runes/battlefields are created at the deck location, never missing
-                // If excess at deck, return to source or delete
-                if (atDeck > needed) {
-                    val returnQty = atDeck - needed
-                    val returnTo = entry.sourceLocationName?.trim()?.lowercase()
-                    if (returnTo != null && returnTo in storageLocations) {
-                        returns.add(Movement(
-                            nameSlug = entry.nameSlug,
-                            displayName = entry.displayName,
-                            quantity = returnQty,
-                            fromLocation = deckLocationDisplayName,
-                            toLocation = storageDisplayNames[returnTo] ?: returnTo,
-                        ))
-                    }
-                    // If no source, excess runes/battlefields are just deleted (not returned)
-                }
                 continue
-            }
-
-            // Non-rune/battlefield card
-            // Return excess to source location (works even if state was reverted,
-            // since cards may still be physically at the deck location)
-            if (atDeck > needed) {
-                val returnQty = atDeck - needed
-                val returnToNorm = entry.sourceLocationName?.trim()?.lowercase()
-                    ?: defaultStorage
-                if (returnToNorm != null) {
-                    returns.add(Movement(
-                        nameSlug = entry.nameSlug,
-                        displayName = entry.displayName,
-                        quantity = returnQty,
-                        fromLocation = deckLocationDisplayName,
-                        toLocation = storageDisplayNames[returnToNorm] ?: returnToNorm,
-                    ))
-                }
             }
 
             // Compute shortfall that needs to be moved from storage
@@ -160,6 +139,47 @@ object DeckBuildPlanner {
                     needed = needed,
                     available = available,
                 ))
+            }
+        }
+
+        // ── Phase 1.5: Compute returns per card slug (excess at deck location) ──
+        // Returns are computed per slug, not per entry, to avoid double-counting
+        // when a card appears in multiple zones (e.g. main + sideboard).
+        for (nameSlug in entryNameSlugs) {
+            val totalAtDeck = linesAtDeckBySlug[nameSlug]?.sumOf { it.quantity } ?: 0
+            val totalNeeded = totalNeededBySlug[nameSlug] ?: 0
+            val excess = totalAtDeck - totalNeeded
+            if (excess <= 0) continue
+
+            // Find the source location for this card (from any entry)
+            val sourceEntry = entries.find { it.nameSlug == nameSlug }
+            val isRuneOrBattlefield = sourceEntry?.zone == DeckZone.rune || sourceEntry?.zone == DeckZone.battlefield
+            val returnToNorm = sourceEntry?.sourceLocationName?.trim()?.lowercase()
+                ?: defaultStorage
+
+            if (isRuneOrBattlefield) {
+                // For runes/battlefields: only return to the original source location
+                val returnToNorm = sourceEntry?.sourceLocationName?.trim()?.lowercase()
+                if (returnToNorm != null && returnToNorm in storageLocations) {
+                    returns.add(Movement(
+                        nameSlug = nameSlug,
+                        displayName = sourceEntry?.displayName ?: nameSlug,
+                        quantity = excess,
+                        fromLocation = deckLocationDisplayName,
+                        toLocation = storageDisplayNames[returnToNorm] ?: returnToNorm,
+                    ))
+                }
+                // If no source or source is not a storage location, excess is deleted (not returned)
+            } else {
+                if (returnToNorm != null) {
+                    returns.add(Movement(
+                        nameSlug = nameSlug,
+                        displayName = sourceEntry?.displayName ?: nameSlug,
+                        quantity = excess,
+                        fromLocation = deckLocationDisplayName,
+                        toLocation = storageDisplayNames[returnToNorm] ?: returnToNorm,
+                    ))
+                }
             }
         }
 
