@@ -201,7 +201,7 @@ class DeckViewModel @Inject constructor(
                         legendDisplayName = legendIdentity?.displayName,
                     )
                 }
-                _deckListState.value = DeckListUiState(decks = summaries, isLoading = false)
+                _deckListState.value = DeckListUiState(decks = summaries.sortedBy { it.name.lowercase() }, isLoading = false)
             }
         }
     }
