@@ -18,6 +18,8 @@ object DeckStats {
         val energyCost: Int?,
         val might: Int?,
         val rarity: String?,
+        val priceEur: Double? = null,
+        val priceUsd: Double? = null,
     )
 
     data class Stats(
@@ -32,6 +34,8 @@ object DeckStats {
         val rarityBreakdown: List<RarityCount>,
         val averageMight: Double?,
         val uniqueCardCount: Int,
+        val totalValueEur: Double?,
+        val totalValueUsd: Double?,
     )
 
     data class TypeCount(val cardType: String, val count: Int)
@@ -89,6 +93,10 @@ object DeckStats {
 
         val uniqueCardCount = playableEntries.map { it.nameSlug }.distinct().size
 
+        // Deck value: sum of price * quantity for all entries with prices
+        val totalValueEur = entries.mapNotNull { e -> e.priceEur?.times(e.quantity) }.takeIf { it.isNotEmpty() }?.sum()
+        val totalValueUsd = entries.mapNotNull { e -> e.priceUsd?.times(e.quantity) }.takeIf { it.isNotEmpty() }?.sum()
+
         return Stats(
             totalCards = totalCards,
             mainDeckCount = mainDeckCount,
@@ -101,6 +109,8 @@ object DeckStats {
             rarityBreakdown = rarityBreakdown,
             averageMight = averageMight,
             uniqueCardCount = uniqueCardCount,
+            totalValueEur = totalValueEur,
+            totalValueUsd = totalValueUsd,
         )
     }
 }

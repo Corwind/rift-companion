@@ -221,7 +221,9 @@ fun CardDetailScreen(
                 }
 
                 // Price
-                if (card.priceEur != null || card.priceUsd != null) {
+                val showEur = card.priceMarket == com.riftcompanion.app.data.prefs.PriceMarket.EUR || card.priceMarket == com.riftcompanion.app.data.prefs.PriceMarket.BOTH
+                val showUsd = card.priceMarket == com.riftcompanion.app.data.prefs.PriceMarket.USD || card.priceMarket == com.riftcompanion.app.data.prefs.PriceMarket.BOTH
+                if ((showEur && card.priceEur != null) || (showUsd && card.priceUsd != null)) {
                     Spacer(Modifier.height(12.dp))
                     ThemedCardSurface(cornerRadius = 12) {
                         Column(modifier = Modifier.padding(14.dp)) {
@@ -231,27 +233,30 @@ fun CardDetailScreen(
                                 Text("Market Price", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
                             }
                             Spacer(Modifier.height(8.dp))
-                            card.priceEur?.let {
+                            if (showEur) card.priceEur?.let {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text("Cardmarket", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text("€%.2f".format(it), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                                 }
                             }
-                            card.priceUsd?.let {
+                            if (showUsd) card.priceUsd?.let {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text("TCGplayer", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text("\$%.2f".format(it), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                    Text("$%.2f".format(it), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                                 }
                             }
-                            card.priceChange7d?.let {
-                                val arrow = if (it >= 0) "▲" else "▼"
-                                val color = if (it >= 0) com.riftcompanion.app.ui.theme.freeColor() else MaterialTheme.colorScheme.error
-                                Text(
-                                    text = "$arrow %.1f%% (7d)".format(kotlin.math.abs(it)),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = color,
-                                    modifier = Modifier.padding(top = 4.dp),
-                                )
+                            // Show 7-day change only when showing a single market (not Both)
+                            if (card.priceMarket != com.riftcompanion.app.data.prefs.PriceMarket.BOTH) {
+                                card.priceChange7d?.let {
+                                    val arrow = if (it >= 0) "▲" else "▼"
+                                    val color = if (it >= 0) com.riftcompanion.app.ui.theme.freeColor() else MaterialTheme.colorScheme.error
+                                    Text(
+                                        text = "$arrow %.1f%% (7d)".format(kotlin.math.abs(it)),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = color,
+                                        modifier = Modifier.padding(top = 4.dp),
+                                    )
+                                }
                             }
                         }
                     }

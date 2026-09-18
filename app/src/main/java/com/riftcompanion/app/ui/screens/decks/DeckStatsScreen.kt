@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -65,6 +66,8 @@ fun DeckStatsScreen(
                 energyCost = e.energyCost,
                 might = e.might,
                 rarity = e.rarity,
+                priceEur = e.priceEur,
+                priceUsd = e.priceUsd,
             )
         }
     )
@@ -136,8 +139,28 @@ fun DeckStatsScreen(
             StatCard(
                 icon = { Icon(Icons.Default.Analytics, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
                 label = "Average Might",
-                value = String.format("%.1f", stats.averageMight),
+                value = "%.1f".format(stats.averageMight),
             )
+        }
+
+        // Deck value
+        if (stats.totalValueEur != null || stats.totalValueUsd != null) {
+            Spacer(Modifier.height(16.dp))
+            SectionTitle("Deck Value")
+            stats.totalValueEur?.let {
+                StatCard(
+                    icon = { Icon(Icons.Default.AttachMoney, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
+                    label = "Cardmarket",
+                    value = "€%.2f".format(it),
+                )
+            }
+            stats.totalValueUsd?.let {
+                StatCard(
+                    icon = { Icon(Icons.Default.AttachMoney, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
+                    label = "TCGplayer",
+                    value = "\$%.2f".format(it),
+                )
+            }
         }
 
         Spacer(Modifier.height(32.dp))
