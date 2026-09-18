@@ -157,7 +157,7 @@ private fun BuildPreviewContent(
                     Spacer(Modifier.size(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = preview.deckLocationName,
+                            text = preview.deckLocationDisplayName,
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                             color = MaterialTheme.colorScheme.onSurface,
                         )

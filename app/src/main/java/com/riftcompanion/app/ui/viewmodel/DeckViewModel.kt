@@ -118,6 +118,7 @@ data class DeckBuildPreview(
     val deckId: String,
     val deckName: String,
     val deckLocationName: String,
+    val deckLocationDisplayName: String,
     val isNewLocation: Boolean,
     val movements: List<CardMovement>,
     val returns: List<CardMovement> = emptyList(),
@@ -936,9 +937,17 @@ class DeckViewModel @Inject constructor(
                 val isNewLocation = existingLocation == null
                 val deckLocationName = existingLocation ?: "${deck.name} (Deck)"
 
-                // Use display name from location policy if available
-                val deckLocationDisplayName = locationPolicyDao.getByName(deckLocationName.lowercase().trim())?.displayName
-                    ?: deckLocationName
+                // Use display name from location policy or inventory location if available
+                val deckLocationDisplayName = run {
+                    val policy = locationPolicyDao.getByName(deckLocationName.lowercase().trim())
+                    if (policy != null) {
+                        policy.displayName.takeIf { it.isNotBlank() } ?: deckLocationName
+                    } else {
+                        val invLoc = inventoryLocationDao.getAll().first()
+                            .find { it.name.equals(deckLocationName, ignoreCase = true) }
+                        invLoc?.displayName?.takeIf { it.isNotBlank() } ?: deckLocationName
+                    }
+                }
 
                 if (isNewLocation) {
                     val normalizedDeckLoc = deckLocationName.lowercase().trim()
@@ -1003,6 +1012,7 @@ class DeckViewModel @Inject constructor(
                         deckId = deckId,
                         deckName = deck.name,
                         deckLocationName = deckLocationName,
+                        deckLocationDisplayName = deckLocationDisplayName,
                         isNewLocation = isNewLocation,
                         movements = plan.movements.map { CardMovement(it.nameSlug, it.displayName, it.quantity, it.fromLocation, it.toLocation) },
                         returns = plan.returns.map { CardMovement(it.nameSlug, it.displayName, it.quantity, it.fromLocation, it.toLocation) },
