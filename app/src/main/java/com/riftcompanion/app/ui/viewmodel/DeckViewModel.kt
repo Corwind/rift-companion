@@ -460,6 +460,17 @@ class DeckViewModel @Inject constructor(
 
     fun deleteDeck(deckId: String) {
         viewModelScope.launch {
+            // Free the linked location so it can be reused
+            val deck = deckDao.getDeck(deckId)
+            if (deck != null) {
+                val linkedLoc = deck.linkedLocationName
+                if (linkedLoc != null) {
+                    val policy = locationPolicyDao.getByName(linkedLoc.lowercase().trim())
+                    if (policy != null && policy.linkedDeckId == deckId) {
+                        locationPolicyDao.upsert(policy.copy(linkedDeckId = null))
+                    }
+                }
+            }
             deckDao.deleteDeck(deckId)
             loadDecks()
         }
