@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.riftcompanion.app.data.db.CardPriceDao
 import coil3.ImageLoader
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
@@ -134,6 +135,37 @@ object AppModule {
         }
     }
 
+    // Migration from v7 → v8: add card_prices table
+    val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS card_prices (
+                    productID INTEGER NOT NULL PRIMARY KEY,
+                    nameSlug TEXT NOT NULL,
+                    finish TEXT NOT NULL,
+                    cardmarketLow REAL,
+                    cardmarketMid REAL,
+                    cardmarketHigh REAL,
+                    cardmarketMarketValue REAL,
+                    cardmarketChange24h REAL,
+                    cardmarketChange7d REAL,
+                    cardmarketChange30d REAL,
+                    tcgplayerLow REAL,
+                    tcgplayerMid REAL,
+                    tcgplayerHigh REAL,
+                    tcgplayerMarketValue REAL,
+                    tcgplayerChange24h REAL,
+                    tcgplayerChange7d REAL,
+                    tcgplayerChange30d REAL,
+                    cardnexusLow REAL,
+                    cardnexusListingCount INTEGER,
+                    updatedAt INTEGER NOT NULL
+                )
+            """.trimIndent())
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_card_prices_nameSlug ON card_prices(nameSlug)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): RiftDatabase {
@@ -142,7 +174,7 @@ object AppModule {
             RiftDatabase::class.java,
             "rift_companion.db",
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -154,6 +186,7 @@ object AppModule {
     @Provides fun provideLocationPolicyDao(db: RiftDatabase): LocationPolicyDao = db.locationPolicyDao()
     @Provides fun provideSyncMetadataDao(db: RiftDatabase): SyncMetadataDao = db.syncMetadataDao()
     @Provides fun provideDeckDao(db: RiftDatabase): DeckDao = db.deckDao()
+    @Provides fun provideCardPriceDao(db: RiftDatabase): CardPriceDao = db.cardPriceDao()
 
     @Provides
     @Singleton
@@ -200,11 +233,12 @@ object AppModule {
         inventoryLocationDao: InventoryLocationDao,
         locationPolicyDao: LocationPolicyDao,
         syncMetadataDao: SyncMetadataDao,
+        cardPriceDao: CardPriceDao,
     ): RiftRepository {
         return RiftRepository(
             client, banlistFetcher, cardIdentityDao, cardPrintingDao,
             inventoryLineDao, inventoryLocationDao,
-            locationPolicyDao, syncMetadataDao,
+            locationPolicyDao, syncMetadataDao, cardPriceDao,
         )
     }
 

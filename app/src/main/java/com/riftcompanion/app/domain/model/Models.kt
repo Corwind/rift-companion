@@ -85,6 +85,9 @@ data class CatalogueCardSummary(
     val expansionSlugs: List<String>,
     val rarities: List<String>,
     val totalOwned: Int = 0,
+    val priceEur: Double? = null,
+    val priceUsd: Double? = null,
+    val priceChange7d: Double? = null,
 ) {
     val id: String get() = identity.nameSlug
     val preferredImageURL: String? get() = preferredPrinting?.imageURL
@@ -100,9 +103,52 @@ data class InventoryCardSummary(
     val rarity: String? = null,
     val finish: String? = null,
     val language: String? = null,
+    val priceEur: Double? = null,
+    val priceUsd: Double? = null,
+    val priceChange7d: Double? = null,
 ) {
     val id: String get() = identity.nameSlug
 }
+
+// ── Card prices ───────────────────────────────────────────────────────
+
+@Serializable
+data class CardPrice(
+    val productID: Long,
+    val nameSlug: String,
+    val finish: String,
+    val cardmarketMarketValue: Double?,   // EUR
+    val cardmarketLow: Double?,
+    val cardmarketChange24h: Double?,
+    val cardmarketChange7d: Double?,
+    val cardmarketChange30d: Double?,
+    val tcgplayerMarketValue: Double?,   // USD
+    val tcgplayerLow: Double?,
+    val tcgplayerChange24h: Double?,
+    val tcgplayerChange7d: Double?,
+    val tcgplayerChange30d: Double?,
+    val cardnexusLow: Double?,            // EUR
+    val cardnexusListingCount: Int?,
+)
+
+@Serializable
+data class CollectionValue(
+    val totalValueEur: Double,
+    val totalValueUsd: Double,
+    val pricedCardCount: Int,
+    val unpricedCardCount: Int,
+    val perCard: List<CardValueSummary>,
+)
+
+@Serializable
+data class CardValueSummary(
+    val nameSlug: String,
+    val displayName: String,
+    val quantity: Int,
+    val marketValueEur: Double?,
+    val marketValueUsd: Double?,
+    val change7d: Double?,
+)
 
 // ── Location policy (local settings overlay) ──────────────────────────
 

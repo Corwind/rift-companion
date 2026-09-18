@@ -16,6 +16,8 @@ import com.riftcompanion.app.domain.model.CardAvailability
 import com.riftcompanion.app.domain.model.CardIdentity
 import com.riftcompanion.app.domain.model.CatalogueCardSummary
 import com.riftcompanion.app.domain.model.CataloguePrintingMetadata
+import com.riftcompanion.app.domain.model.CollectionValue
+import com.riftcompanion.app.domain.model.CardValueSummary
 import com.riftcompanion.app.domain.model.InventoryCardSummary
 import com.riftcompanion.app.domain.model.InventoryBulkMoveItem
 import com.riftcompanion.app.domain.model.InventoryBulkMoveRequest
@@ -42,6 +44,14 @@ import javax.inject.Singleton
  * when the app is not in the foreground.
  */
 @Singleton
+private data class CatalogueFlowData(
+    val identities: List<com.riftcompanion.app.data.db.CardIdentityEntity>,
+    val printings: List<com.riftcompanion.app.data.db.CardPrintingEntity>,
+    val lines: List<com.riftcompanion.app.data.db.InventoryLineEntity>,
+    val locations: List<com.riftcompanion.app.data.db.InventoryLocationEntity>,
+    val policies: List<com.riftcompanion.app.data.db.LocationPolicyEntity>,
+)
+
 class RiftRepository @Inject constructor(
     private val cardNexusClient: CardNexusClient,
     private val banlistFetcher: BanlistFetcher,
@@ -51,6 +61,7 @@ class RiftRepository @Inject constructor(
     private val inventoryLocationDao: InventoryLocationDao,
     private val locationPolicyDao: LocationPolicyDao,
     private val syncMetadataDao: SyncMetadataDao,
+    private val cardPriceDao: com.riftcompanion.app.data.db.CardPriceDao,
 ) {
 
     // ── Sync ────────────────────────────────────────────────────────────
@@ -119,6 +130,47 @@ class RiftRepository @Inject constructor(
 
             // Banlist is now static — no DB storage needed
 
+            // 6. Fetch and store price feed (best-effort, don't fail sync on price errors)
+            try {
+                val priceMetadata = cardNexusClient.fetchPriceFeedMetadata().getOrThrow()
+                val storedPriceChecksum = syncMetadataDao.get("prices_checksum")
+                if (storedPriceChecksum != priceMetadata.checksum) {
+                    val printingMap = cardPrintingDao.getAll().first().associateBy { it.productID }
+                    val priceEntities = mutableListOf<com.riftcompanion.app.data.db.CardPriceEntity>()
+                    cardNexusClient.downloadPriceFeed(priceMetadata.url, priceMetadata.encoding).getOrThrow().forEach { priceDto ->
+                        val printing = printingMap[priceDto.productId] ?: return@forEach
+                        priceDto.pricesByFinish.forEach { (finish, prices) ->
+                            priceEntities.add(com.riftcompanion.app.data.db.CardPriceEntity(
+                                productID = priceDto.productId,
+                                nameSlug = printing.nameSlug,
+                                finish = finish,
+                                cardmarketLow = prices.cardmarket?.low,
+                                cardmarketMid = prices.cardmarket?.mid,
+                                cardmarketHigh = prices.cardmarket?.high,
+                                cardmarketMarketValue = prices.cardmarket?.marketValue,
+                                cardmarketChange24h = prices.cardmarket?.change24h,
+                                cardmarketChange7d = prices.cardmarket?.change7d,
+                                cardmarketChange30d = prices.cardmarket?.change30d,
+                                tcgplayerLow = prices.tcgplayer?.low,
+                                tcgplayerMid = prices.tcgplayer?.mid,
+                                tcgplayerHigh = prices.tcgplayer?.high,
+                                tcgplayerMarketValue = prices.tcgplayer?.marketValue,
+                                tcgplayerChange24h = prices.tcgplayer?.change24h,
+                                tcgplayerChange7d = prices.tcgplayer?.change7d,
+                                tcgplayerChange30d = prices.tcgplayer?.change30d,
+                                cardnexusLow = prices.cardnexus?.low?.amount,
+                                cardnexusListingCount = prices.cardnexus?.listingCount,
+                                updatedAt = System.currentTimeMillis(),
+                            ))
+                        }
+                    }
+                    cardPriceDao.replaceAll(priceEntities)
+                    syncMetadataDao.set("prices_checksum", priceMetadata.checksum)
+                }
+            } catch (e: Exception) {
+                // Price feed is best-effort — don't fail the entire sync
+            }
+
             val completedAt = System.currentTimeMillis()
             syncMetadataDao.set("last_sync", completedAt.toString())
 
@@ -135,6 +187,75 @@ class RiftRepository @Inject constructor(
         syncMetadataDao.get("last_sync")?.toLongOrNull()
     }
 
+    // ── Collection value ───────────────────────────────────────────────
+
+    fun collectionValueFlow(): Flow<CollectionValue> {
+        return combine(
+            inventoryLineDao.getAll(),
+            cardPriceDao.getAll(),
+            cardPrintingDao.getAll(),
+            cardIdentityDao.getAll(),
+        ) { lines, prices, printings, identities ->
+            val identityMap = identities.associateBy { it.nameSlug }
+            val printingMap = printings.associateBy { it.productID }
+            val priceMap = prices.associateBy { it.productID }
+
+            val perCard = mutableListOf<CardValueSummary>()
+            var totalEur = 0.0
+            var totalUsd = 0.0
+            var pricedCount = 0
+            var unpricedCount = 0
+
+            // Group inventory lines by nameSlug and sum quantities
+            val qtyBySlug = lines.groupBy { printingMap[it.productId]?.nameSlug ?: "" }
+                .mapValues { (_, l) -> l.sumOf { it.quantity } }
+                .filter { it.key.isNotBlank() }
+
+            for ((nameSlug, qty) in qtyBySlug) {
+                val identity = identityMap[nameSlug]
+                val displayName = identity?.displayName ?: nameSlug
+
+                // Find the best price for this card (prefer the first printing's price)
+                val cardPrintings = printings.filter { it.nameSlug == nameSlug }
+                val price = cardPrintings.firstNotNullOfOrNull { printingMap[it.productID]?.let { priceMap[it.productID] } }
+
+                if (price != null && (price.cardmarketMarketValue != null || price.tcgplayerMarketValue != null)) {
+                    val eur = price.cardmarketMarketValue?.times(qty)
+                    val usd = price.tcgplayerMarketValue?.times(qty)
+                    if (eur != null) totalEur += eur
+                    if (usd != null) totalUsd += usd
+                    pricedCount++
+                    perCard.add(CardValueSummary(
+                        nameSlug = nameSlug,
+                        displayName = displayName,
+                        quantity = qty,
+                        marketValueEur = price.cardmarketMarketValue?.times(qty),
+                        marketValueUsd = price.tcgplayerMarketValue?.times(qty),
+                        change7d = price.cardmarketChange7d,
+                    ))
+                } else {
+                    unpricedCount++
+                    perCard.add(CardValueSummary(
+                        nameSlug = nameSlug,
+                        displayName = displayName,
+                        quantity = qty,
+                        marketValueEur = null,
+                        marketValueUsd = null,
+                        change7d = null,
+                    ))
+                }
+            }
+
+            CollectionValue(
+                totalValueEur = totalEur,
+                totalValueUsd = totalUsd,
+                pricedCardCount = pricedCount,
+                unpricedCardCount = unpricedCount,
+                perCard = perCard.sortedByDescending { it.marketValueEur ?: 0.0 },
+            )
+        }
+    }
+
     // ── Catalogue reads ────────────────────────────────────────────────
 
     fun catalogueCardsFlow(): Flow<List<CatalogueCardSummary>> {
@@ -145,7 +266,9 @@ class RiftRepository @Inject constructor(
             inventoryLocationDao.getAll(),
             locationPolicyDao.getAll(),
         ) { identities, printings, lines, locations, policies ->
-            buildCatalogueSummaries(identities, printings, lines, locations, policies)
+            CatalogueFlowData(identities, printings, lines, locations, policies)
+        }.combine(cardPriceDao.getAll()) { data, prices ->
+            buildCatalogueSummaries(data.identities, data.printings, data.lines, data.locations, data.policies, prices)
         }
     }
 
@@ -159,7 +282,9 @@ class RiftRepository @Inject constructor(
             inventoryLocationDao.getAll(),
             locationPolicyDao.getAll(),
         ) { identities, printings, lines, locations, policies ->
-            buildInventorySummaries(identities, printings, lines, locations, policies)
+            CatalogueFlowData(identities, printings, lines, locations, policies)
+        }.combine(cardPriceDao.getAll()) { data, prices ->
+            buildInventorySummaries(data.identities, data.printings, data.lines, data.locations, data.policies, prices)
         }
     }
 
@@ -455,17 +580,20 @@ class RiftRepository @Inject constructor(
         lines: List<com.riftcompanion.app.data.db.InventoryLineEntity>,
         locations: List<com.riftcompanion.app.data.db.InventoryLocationEntity>,
         policies: List<com.riftcompanion.app.data.db.LocationPolicyEntity>,
+        prices: List<com.riftcompanion.app.data.db.CardPriceEntity>,
     ): List<CatalogueCardSummary> {
         val identityMap = identities.associateBy { it.nameSlug }
         val printingsByName = printings.groupBy { it.nameSlug }
         val availabilityMap = buildAvailabilityMap(lines, policies, printings)
         val locationDisplayMap = locations.associateBy { it.name }
+        val priceMap = prices.associateBy { it.productID }
 
         return identities.map { entity ->
             val identity = EntityConverter.toDomain(entity)
             val cardPrintings = printingsByName[entity.nameSlug] ?: emptyList()
             val preferred = cardPrintings.firstOrNull { it.imageURL != null } ?: cardPrintings.firstOrNull()
             val availability = availabilityMap[entity.nameSlug] ?: CardAvailability()
+            val price = cardPrintings.firstNotNullOfOrNull { priceMap[it.productID] }
 
             CatalogueCardSummary(
                 identity = identity,
@@ -483,6 +611,9 @@ class RiftRepository @Inject constructor(
                 expansionSlugs = cardPrintings.mapNotNull { it.expansionSlug }.distinct(),
                 rarities = cardPrintings.mapNotNull { it.rarity }.distinct(),
                 totalOwned = availability.totalOwned,
+                priceEur = price?.cardmarketMarketValue,
+                priceUsd = price?.tcgplayerMarketValue,
+                priceChange7d = price?.cardmarketChange7d,
             )
         }
     }
@@ -493,12 +624,14 @@ class RiftRepository @Inject constructor(
         lines: List<com.riftcompanion.app.data.db.InventoryLineEntity>,
         locations: List<com.riftcompanion.app.data.db.InventoryLocationEntity>,
         policies: List<com.riftcompanion.app.data.db.LocationPolicyEntity>,
+        prices: List<com.riftcompanion.app.data.db.CardPriceEntity>,
     ): List<InventoryCardSummary> {
         val identityMap = identities.associateBy { it.nameSlug }
         val printingsByProduct = printings.associateBy { it.productID }
         val printingsByName = printings.groupBy { it.nameSlug }
         val policyMap = policies.associateBy { it.name }
         val locationDisplayMap = locations.associateBy { it.name }
+        val priceMap = prices.associateBy { it.productID }
 
         // Group inventory lines by nameSlug (via productID → printing → nameSlug)
         val linesByName = lines.groupBy { line ->
@@ -538,6 +671,7 @@ class RiftRepository @Inject constructor(
                 .sumOf { it.quantity }
 
             val firstLine = cardLines.first()
+            val price = cardPrintings.firstNotNullOfOrNull { priceMap[it.productID] }
             InventoryCardSummary(
                 identity = identity,
                 preferredImageURL = preferred?.imageURL,
@@ -551,6 +685,9 @@ class RiftRepository @Inject constructor(
                 rarity = preferred?.rarity,
                 finish = firstLine.finish,
                 language = firstLine.language,
+                priceEur = price?.cardmarketMarketValue,
+                priceUsd = price?.tcgplayerMarketValue,
+                priceChange7d = price?.cardmarketChange7d,
             )
         }.filterNotNull()
     }

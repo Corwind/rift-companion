@@ -86,3 +86,33 @@ data class SyncMetadataEntity(
     @PrimaryKey val key: String,
     val value: String,
 )
+
+// ── Card prices ───────────────────────────────────────────────────────
+
+@Entity(tableName = "card_prices", indices = [Index("nameSlug")])
+data class CardPriceEntity(
+    @PrimaryKey val productID: Long,
+    val nameSlug: String,
+    val finish: String,
+    // Cardmarket (EUR)
+    val cardmarketLow: Double?,
+    val cardmarketMid: Double?,
+    val cardmarketHigh: Double?,
+    val cardmarketMarketValue: Double?,
+    val cardmarketChange24h: Double?,
+    val cardmarketChange7d: Double?,
+    val cardmarketChange30d: Double?,
+    // TCGplayer (USD)
+    val tcgplayerLow: Double?,
+    val tcgplayerMid: Double?,
+    val tcgplayerHigh: Double?,
+    val tcgplayerMarketValue: Double?,
+    val tcgplayerChange24h: Double?,
+    val tcgplayerChange7d: Double?,
+    val tcgplayerChange30d: Double?,
+    // CardNexus marketplace floor (EUR)
+    val cardnexusLow: Double?,
+    val cardnexusListingCount: Int?,
+    // Metadata
+    val updatedAt: Long,
+)

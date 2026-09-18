@@ -13,8 +13,9 @@ import androidx.room.RoomDatabase
         SyncMetadataEntity::class,
         DeckEntity::class,
         DeckEntryEntity::class,
+        CardPriceEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class RiftDatabase : RoomDatabase() {
@@ -25,4 +26,5 @@ abstract class RiftDatabase : RoomDatabase() {
     abstract fun locationPolicyDao(): LocationPolicyDao
     abstract fun syncMetadataDao(): SyncMetadataDao
     abstract fun deckDao(): DeckDao
+    abstract fun cardPriceDao(): CardPriceDao
 }
