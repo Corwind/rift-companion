@@ -216,6 +216,13 @@ private fun CatalogueGridCard(card: CatalogueCardSummary, isBanned: Boolean, onC
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            card.priceEur?.let {
+                Text(
+                    text = "€${String.format("%.2f", it)}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

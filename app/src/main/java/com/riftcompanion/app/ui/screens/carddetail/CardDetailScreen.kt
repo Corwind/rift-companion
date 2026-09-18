@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Bolt
@@ -218,6 +219,36 @@ fun CardDetailScreen(
                     MetadataRow("Language", card.language?.uppercase())
                     card.printingCount?.let { MetadataRow("Known printings", it.toString()) }
                 }
+
+                // Price
+                if (card.priceEur != null || card.priceUsd != null) {
+                    Spacer(Modifier.height(12.dp))
+                    ThemedCardSurface(cornerRadius = 12) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.AttachMoney, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Market Price", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                card.priceEur?.let { MetadataRow("Cardmarket", "€${String.format("%.2f", it)}") }
+                                card.priceUsd?.let { MetadataRow("TCGplayer", "\$${String.format("%.2f", it)}") }
+                            }
+                            card.priceChange7d?.let {
+                                val arrow = if (it >= 0) "▲" else "▼"
+                                val color = if (it >= 0) com.riftcompanion.app.ui.theme.freeColor() else MaterialTheme.colorScheme.error
+                                Text(
+                                    text = "$arrow ${String.format("%.1f", kotlin.math.abs(it))}% (7d)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = color,
+                                    modifier = Modifier.padding(top = 4.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Spacer(Modifier.height(20.dp))
 
                 // Availability
