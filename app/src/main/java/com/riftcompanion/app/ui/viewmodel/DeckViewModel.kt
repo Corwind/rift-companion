@@ -936,6 +936,10 @@ class DeckViewModel @Inject constructor(
                 val isNewLocation = existingLocation == null
                 val deckLocationName = existingLocation ?: "${deck.name} (Deck)"
 
+                // Use display name from location policy if available
+                val deckLocationDisplayName = locationPolicyDao.getByName(deckLocationName.lowercase().trim())?.displayName
+                    ?: deckLocationName
+
                 if (isNewLocation) {
                     val normalizedDeckLoc = deckLocationName.lowercase().trim()
                     val policy = locationPolicyDao.getByName(normalizedDeckLoc)
@@ -989,7 +993,7 @@ class DeckViewModel @Inject constructor(
                     lines = allLines,
                     storageLocations = storageLocationNames,
                     deckLocationName = deckLocationName,
-                    deckLocationDisplayName = deckLocationName,
+                    deckLocationDisplayName = deckLocationDisplayName,
                     storageDisplayNames = storageDisplayNames,
                     isAlreadyBuilt = deck.state == "assembled",
                 )
@@ -1259,7 +1263,7 @@ class DeckViewModel @Inject constructor(
                 val deck = deckDao.getDeck(preview.deckId)
                 if (deck != null) {
                     deckDao.insertDeck(deck.copy(
-                        linkedLocationName = deckLocationNormalized,
+                        linkedLocationName = preview.deckLocationName,
                         state = "assembled",
                         updatedAt = System.currentTimeMillis(),
                     ))
