@@ -40,6 +40,7 @@ data class LocationEditState(
 @HiltViewModel
 class LocationsViewModel @Inject constructor(
     private val repository: RiftRepository,
+    private val cardNexusClient: com.riftcompanion.app.data.api.CardNexusClient,
 ) : ViewModel() {
 
     private val _editState = MutableStateFlow(LocationEditState())
@@ -181,18 +182,27 @@ class LocationsViewModel @Inject constructor(
 
         viewModelScope.launch {
             _editState.value = state.copy(isDeleting = true, showDeleteConfirm = false)
-            val result = repository.deleteLocation(location.displayName)
-            result.fold(
-                onSuccess = {
-                    repository.deleteLocationPolicy(location.name)
-                    _message.value = "Deleted '${location.displayName}' from CardNexus."
-                    _editState.value = LocationEditState()
-                },
-                onFailure = { error ->
-                    _editState.value = state.copy(isDeleting = false)
-                    _message.value = "Location deletion failed: ${error.message}"
-                },
-            )
+            // First check: re-sync inventory from API to make sure the location is truly empty
+            val apiLines = cardNexusClient.fetchAllInventoryLines().getOrElse { emptyList() }
+            val apiCount = apiLines.filter { it.location.equals(location.name, ignoreCase = true) }.sumOf { it.quantity }
+            if (apiCount > 0) {
+                _editState.value = state.copy(isDeleting = false)
+                _message.value = "Cannot delete: location has $apiCount cards in CardNexus."
+            } else {
+                // Delete from API
+                val result = repository.deleteLocation(location.displayName)
+                result.fold(
+                    onSuccess = {
+                        repository.deleteLocationPolicy(location.name)
+                        _message.value = "Deleted '${location.displayName}' from CardNexus."
+                        _editState.value = LocationEditState()
+                    },
+                    onFailure = { error ->
+                        _editState.value = state.copy(isDeleting = false)
+                        _message.value = "Location deletion failed: ${error.message}"
+                    },
+                )
+            }
         }
     }
 
