@@ -252,31 +252,6 @@ fun SettingsScreen(
 
                 Spacer(Modifier.height(12.dp))
 
-                // LLM priority
-                Text("AI priority", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-                Spacer(Modifier.height(4.dp))
-                com.riftcompanion.app.data.prefs.LlmPriority.entries.forEach { priority ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable { viewModel.setLlmPriority(priority) }.padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(
-                            selected = uiState.llmPriority == priority,
-                            onClick = { viewModel.setLlmPriority(priority) },
-                        )
-                        Spacer(Modifier.size(8.dp))
-                        Column {
-                            Text(priority.title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-                            Text(
-                                priority.description,
-                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-
             }
 
             SettingsCard("Market", Icons.Default.AttachMoney) {
