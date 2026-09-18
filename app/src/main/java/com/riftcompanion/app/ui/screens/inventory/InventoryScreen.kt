@@ -1009,6 +1009,13 @@ private fun InventoryListRow(card: InventoryCardSummary, isBanned: Boolean, onCl
                     style = MaterialTheme.typography.labelSmall,
                     color = com.riftcompanion.app.ui.theme.freeColor(),
                 )
+                card.priceEur?.let {
+                    Text(
+                        text = "€${String.format("%.2f", it)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             Spacer(Modifier.width(4.dp))
             Icon(

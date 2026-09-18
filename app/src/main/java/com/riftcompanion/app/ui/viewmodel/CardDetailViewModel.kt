@@ -34,6 +34,9 @@ data class CardDetail(
     val finish: String?,
     val language: String?,
     val locations: List<LocationQuantity>,
+    val priceEur: Double? = null,
+    val priceUsd: Double? = null,
+    val priceChange7d: Double? = null,
 )
 
 data class CardDetailUiState(
@@ -54,6 +57,7 @@ class CardDetailViewModel @Inject constructor(
     private val inventoryLineDao: InventoryLineDao,
     private val inventoryLocationDao: InventoryLocationDao,
     private val locationPolicyDao: LocationPolicyDao,
+    private val cardPriceDao: com.riftcompanion.app.data.db.CardPriceDao,
     private val repository: RiftRepository,
 ) : ViewModel() {
 
@@ -151,6 +155,9 @@ class CardDetailViewModel @Inject constructor(
                         .thenBy { it.displayName.lowercase() }
                 )
 
+            // Load price for preferred printing
+            val price = preferred?.let { cardPriceDao.getByProductId(it.productID) }
+
             _uiState.value = CardDetailUiState(
                 card = CardDetail(
                     identity = identity,
@@ -172,6 +179,9 @@ class CardDetailViewModel @Inject constructor(
                     finish = firstLine?.finish,
                     language = firstLine?.language,
                     locations = locationQuantities,
+                    priceEur = price?.cardmarketMarketValue,
+                    priceUsd = price?.tcgplayerMarketValue,
+                    priceChange7d = price?.cardmarketChange7d,
                 ),
                 isLoading = false,
                 locationsForEditing = editableLocations,
