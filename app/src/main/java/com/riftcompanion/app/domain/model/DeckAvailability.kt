@@ -14,7 +14,8 @@ package com.riftcompanion.app.domain.model
  * come from different sources (create-from-location uses the exact API name,
  * build uses a generated name), and inventory line location names may differ
  * in casing from the API. Case-insensitive comparison here is MATCHING only,
- * not identity — distinct locations still have distinct names.
+ * not identity — distinct locations still have distinct names. The original
+ * (non-lowercased) names are always used when passing to the API.
  */
 object DeckAvailability {
 
@@ -32,8 +33,8 @@ object DeckAvailability {
      * @param zone the deck zone this card belongs to
      * @param lineLocations location names of all inventory lines for this card
      * @param lineQuantities quantities of each inventory line (parallel to [lineLocations])
-     * @param storageLocations normalized names of storage-type locations
-     * @param deckLocations normalized names of all deck-type locations
+     * @param storageLocations names of storage-type locations
+     * @param deckLocations names of all deck-type locations
      * @param linkedLocation the deck's linked location name (may be null)
      */
     fun compute(
@@ -49,20 +50,25 @@ object DeckAvailability {
             "lineLocations and lineQuantities must be parallel"
         }
 
-        val linkedNorm = linkedLocation?.trim()?.lowercase()
+        val linkedTrimmed = linkedLocation?.trim()
+
+        fun String?.matchesAny(names: Set<String>): Boolean =
+            this != null && names.any { other -> this.trim().equals(other, ignoreCase = true) }
+
+        fun String?.matches(name: String?): Boolean =
+            this != null && name != null && this.trim().equals(name, ignoreCase = true)
 
         val inStorage = lineLocations.zip(lineQuantities)
-            .filter { (loc, _) -> loc?.trim()?.lowercase() in storageLocations }
+            .filter { (loc, _) -> loc.matchesAny(storageLocations) }
             .sumOf { it.second }
 
         val inDeckLocation = lineLocations.zip(lineQuantities)
-            .filter { (loc, _) -> loc?.trim()?.lowercase() == linkedNorm }
+            .filter { (loc, _) -> loc.matches(linkedTrimmed) }
             .sumOf { it.second }
 
         val inDecks = lineLocations.zip(lineQuantities)
             .filter { (loc, _) ->
-                val norm = loc?.trim()?.lowercase()
-                norm in deckLocations && norm != linkedNorm
+                loc.matchesAny(deckLocations) && !loc.matches(linkedTrimmed)
             }
             .sumOf { it.second }
 
