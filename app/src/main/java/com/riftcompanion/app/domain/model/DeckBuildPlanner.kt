@@ -209,9 +209,23 @@ object DeckBuildPlanner {
             }
         }
 
+        // Merge movements by (nameSlug, fromLocation, toLocation) so the same card
+        // from the same source shows as one movement with the total quantity
+        val mergedMovements = movements
+            .groupBy { Triple(it.nameSlug, it.fromLocation, it.toLocation) }
+            .map { (_, group) ->
+                group.first().copy(quantity = group.sumOf { it.quantity })
+            }
+
+        val mergedReturns = returns
+            .groupBy { Triple(it.nameSlug, it.fromLocation, it.toLocation) }
+            .map { (_, group) ->
+                group.first().copy(quantity = group.sumOf { it.quantity })
+            }
+
         return Plan(
-            movements = movements,
-            returns = returns,
+            movements = mergedMovements,
+            returns = mergedReturns,
             missing = missing,
         )
     }
