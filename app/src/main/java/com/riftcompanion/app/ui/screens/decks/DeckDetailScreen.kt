@@ -230,12 +230,12 @@ fun DeckDetailScreen(
                     // Not built: show build icon
                     IconButton(
                         onClick = { onBuildDeck(deckId) },
-                        enabled = deck.isLegal && !deck.hasMissingCards,
+                        enabled = deck.isLegal,
                     ) {
                         Icon(
                             Icons.Default.Build,
                             contentDescription = "Build deck",
-                            tint = if (deck.isLegal && !deck.hasMissingCards) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (deck.isLegal) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
