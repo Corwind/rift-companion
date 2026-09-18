@@ -183,3 +183,15 @@ data class PriceFeedCardnexusLowDTO(
     val amount: Double? = null,
     val currency: String? = null,
 )
+
+// ── Inventory line creation DTOs ───────────────────────────────────────
+
+@Serializable
+data class InventoryLineCreateDTO(
+    val productId: Long,
+    val finish: String,
+    val quantity: Int,
+    val location: String? = null,
+    val condition: String? = "NM",
+    val language: String? = null,
+)

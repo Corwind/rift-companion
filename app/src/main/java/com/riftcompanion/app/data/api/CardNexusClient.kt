@@ -262,6 +262,33 @@ class CardNexusClient @Inject constructor(
         }
     }
 
+    data class InventoryLineCreate(
+        val productId: Long,
+        val finish: String,
+        val quantity: Int,
+        val location: String?,
+        val condition: String? = "NM",
+        val language: String? = null,
+    )
+
+    suspend fun createInventoryLines(lines: List<InventoryLineCreate>, idempotencyKey: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val items = lines.map { com.riftcompanion.app.data.api.dto.InventoryLineCreateDTO(it.productId, it.finish, it.quantity, it.location, it.condition, it.language) }
+            val jsonArray = json.encodeToString(
+                kotlinx.serialization.builtins.ListSerializer(com.riftcompanion.app.data.api.dto.InventoryLineCreateDTO.serializer()),
+                items,
+            )
+            val body = """{"lines":$jsonArray}""".toRequestBody("application/json".toMediaType())
+            val httpRequest = authRequestBuilder(BASE_URL + "inventory")
+                .post(body)
+                .header("Idempotency-Key", idempotencyKey)
+                .build()
+            val response = okHttpClient.newCall(httpRequest).execute()
+            if (!response.isSuccessful) throw httpError(response.code, response.body?.string())
+            response.close()
+        }
+    }
+
     suspend fun bulkUpdateInventory(request: InventoryBulkMoveRequest): Result<InventoryBulkMoveResponse> = withContext(Dispatchers.IO) {
         runCatching {
             val dto = DtoMapper.toBulkUpdateDTO(request)

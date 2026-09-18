@@ -1166,6 +1166,41 @@ class DeckViewModel @Inject constructor(
                 deckDao.deleteEntriesForDeck(preview.deckId)
                 deckDao.insertEntries(updatedEntries)
 
+                // Create inventory lines in the API for runes/battlefields that don't exist in inventory
+                val allPrintings = cardPrintingDao.getAll().first().associateBy { it.nameSlug }
+                val linesToCreate = mutableListOf<com.riftcompanion.app.data.api.CardNexusClient.InventoryLineCreate>()
+                for (entry in existingEntries) {
+                    val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
+                    val isRuneOrBattlefield = zone == DeckZone.rune || zone == DeckZone.battlefield
+                    val printing = allPrintings[entry.nameSlug] ?: continue
+                    val movedFromStorage = preview.movements
+                        .filter { it.nameSlug == entry.nameSlug }
+                        .sumOf { it.quantity }
+                    val alreadyAtDeck = inventoryLineDao.getLinesByCardSlug(entry.nameSlug)
+                        .filter { (it.locationName?.trim()?.equals(deckLocationName, ignoreCase = true) == true) }
+                        .sumOf { it.quantity }
+                    val toCreate = entry.quantity - movedFromStorage - alreadyAtDeck
+                    if (toCreate <= 0) continue
+                    // For runes/battlefields, create in API. For other cards, only if they're missing (shouldn't happen since build is blocked by missing cards, but just in case)
+                    linesToCreate.add(com.riftcompanion.app.data.api.CardNexusClient.InventoryLineCreate(
+                        productId = printing.productID,
+                        finish = "normal",
+                        quantity = toCreate,
+                        location = deckLocationName,
+                        condition = "NM",
+                        language = null,
+                    ))
+                }
+                if (linesToCreate.isNotEmpty()) {
+                    cardNexusClient.createInventoryLines(
+                        lines = linesToCreate,
+                        idempotencyKey = "build_create_${preview.deckId}_${System.currentTimeMillis()}",
+                    ).getOrThrow()
+                    // Re-sync inventory to get the newly created lines with real IDs
+                    val syncedLines2 = cardNexusClient.fetchAllInventoryLines().getOrThrow()
+                    inventoryLineDao.replaceApiLines(syncedLines2.map { com.riftcompanion.app.data.db.EntityConverter.toEntity(it) })
+                }
+
                 // Link location to deck and mark as assembled
                 val deck = deckDao.getDeck(preview.deckId)
                 if (deck != null) {
