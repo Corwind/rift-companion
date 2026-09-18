@@ -276,6 +276,31 @@ fun SettingsScreen(
 
                 Spacer(Modifier.height(12.dp))
 
+                // Price currency
+                Text("Price currency", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                Spacer(Modifier.height(4.dp))
+                com.riftcompanion.app.data.prefs.PriceCurrency.entries.forEach { currency ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { viewModel.setPriceCurrency(currency) }.padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = uiState.priceCurrency == currency,
+                            onClick = { viewModel.setPriceCurrency(currency) },
+                        )
+                        Spacer(Modifier.size(8.dp))
+                        Column {
+                            Text(currency.title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                            Text(
+                                "${currency.symbol} — ${currency.code}",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
             }
 
             // Version
