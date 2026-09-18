@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Key
@@ -276,31 +277,35 @@ fun SettingsScreen(
 
                 Spacer(Modifier.height(12.dp))
 
-                // Price currency
-                Text("Price currency", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+            }
+
+            SettingsCard("Market", Icons.Default.AttachMoney) {
+                // Market selection
+                Text("Market", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(Modifier.height(4.dp))
-                com.riftcompanion.app.data.prefs.PriceCurrency.entries.forEach { currency ->
+                com.riftcompanion.app.data.prefs.PriceMarket.entries.forEach { currency ->
                     Row(
-                        modifier = Modifier.fillMaxWidth().clickable { viewModel.setPriceCurrency(currency) }.padding(vertical = 4.dp),
+                        modifier = Modifier.fillMaxWidth().clickable { viewModel.setPriceMarket(currency) }.padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(
-                            selected = uiState.priceCurrency == currency,
-                            onClick = { viewModel.setPriceCurrency(currency) },
+                            selected = uiState.priceMarket == currency,
+                            onClick = { viewModel.setPriceMarket(currency) },
                         )
                         Spacer(Modifier.size(8.dp))
                         Column {
                             Text(currency.title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                             Text(
-                                "${currency.symbol} — ${currency.code}",
+                                when (currency) {
+                                    com.riftcompanion.app.data.prefs.PriceMarket.EUR -> "Show Cardmarket prices in euros"
+                                    com.riftcompanion.app.data.prefs.PriceMarket.USD -> "Show TCGplayer prices in dollars"
+                                    com.riftcompanion.app.data.prefs.PriceMarket.BOTH -> "Show both Cardmarket and TCGplayer"
+                                },
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
                 }
-
-                Spacer(Modifier.height(12.dp))
-
             }
 
             // Version
