@@ -218,7 +218,7 @@ private fun CatalogueGridCard(card: CatalogueCardSummary, isBanned: Boolean, onC
             }
             card.priceEur?.let {
                 Text(
-                    text = "€${String.format("%.2f", it)}",
+                    text = "€%.2f".format(it),
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

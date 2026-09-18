@@ -231,15 +231,23 @@ fun CardDetailScreen(
                                 Text("Market Price", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
                             }
                             Spacer(Modifier.height(8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                card.priceEur?.let { MetadataRow("Cardmarket", "€${String.format("%.2f", it)}") }
-                                card.priceUsd?.let { MetadataRow("TCGplayer", "\$${String.format("%.2f", it)}") }
+                            card.priceEur?.let {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Cardmarket", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("€%.2f".format(it), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                            card.priceUsd?.let {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("TCGplayer", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("\$%.2f".format(it), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                }
                             }
                             card.priceChange7d?.let {
                                 val arrow = if (it >= 0) "▲" else "▼"
                                 val color = if (it >= 0) com.riftcompanion.app.ui.theme.freeColor() else MaterialTheme.colorScheme.error
                                 Text(
-                                    text = "$arrow ${String.format("%.1f", kotlin.math.abs(it))}% (7d)",
+                                    text = "$arrow %.1f%% (7d)".format(kotlin.math.abs(it)),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = color,
                                     modifier = Modifier.padding(top = 4.dp),
