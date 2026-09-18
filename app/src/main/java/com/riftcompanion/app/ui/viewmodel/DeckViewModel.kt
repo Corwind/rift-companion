@@ -167,6 +167,7 @@ class DeckViewModel @Inject constructor(
     private val locationPolicyDao: LocationPolicyDao,
     private val cardPriceDao: com.riftcompanion.app.data.db.CardPriceDao,
     private val settingsDataStore: com.riftcompanion.app.data.prefs.SettingsDataStore,
+    private val cardNexusClient: com.riftcompanion.app.data.api.CardNexusClient,
 ) : ViewModel() {
 
     private val _deckListState = MutableStateFlow(DeckListUiState(isLoading = true))
@@ -1024,8 +1025,13 @@ class DeckViewModel @Inject constructor(
             try {
                 val deckLocationNormalized = preview.deckLocationName.lowercase().trim()
 
-                // Create deck location if new
+                // Create deck location if new (both API + local)
                 if (preview.isNewLocation) {
+                    cardNexusClient.upsertLocation(
+                        com.riftcompanion.app.domain.model.InventoryLocationUpsertRequest(
+                            name = preview.deckLocationName,
+                        ),
+                    )
                     locationPolicyDao.upsert(LocationPolicyEntity(
                         name = deckLocationNormalized,
                         displayName = preview.deckLocationName,
@@ -1046,8 +1052,60 @@ class DeckViewModel @Inject constructor(
                     ))
                 }
 
-                // Move cards and record source tracking
+                // Build API bulk update items for movements (storage → deck)
+                val apiMoves = mutableListOf<com.riftcompanion.app.domain.model.InventoryBulkMoveItem>()
+
+                for (movement in preview.movements) {
+                    val sourceLines = inventoryLineDao.getLinesByCardSlug(movement.nameSlug)
+                        .filter { it.locationName == movement.fromLocation }
+                        .sortedBy { it.quantity }
+
+                    var toMove = movement.quantity
+                    for (line in sourceLines) {
+                        if (toMove <= 0) break
+                        val take = minOf(toMove, line.quantity)
+                        // Move `take` cards from source to deck location via API
+                        apiMoves.add(com.riftcompanion.app.domain.model.InventoryBulkMoveItem(
+                            inventoryID = line.id,
+                            destinationLocationName = deckLocationNormalized,
+                            count = take,
+                        ))
+                        toMove -= take
+                    }
+                }
+
+                // Build API bulk update items for returns (deck → storage)
+                for (returnMovement in preview.returns) {
+                    val deckLines = inventoryLineDao.getLinesByCardSlug(returnMovement.nameSlug)
+                        .filter { it.locationName?.trim()?.lowercase() == deckLocationNormalized }
+                        .sortedBy { it.quantity }
+
+                    var toReturn = returnMovement.quantity
+                    for (line in deckLines) {
+                        if (toReturn <= 0) break
+                        val take = minOf(toReturn, line.quantity)
+                        apiMoves.add(com.riftcompanion.app.domain.model.InventoryBulkMoveItem(
+                            inventoryID = line.id,
+                            destinationLocationName = returnMovement.toLocation,
+                            count = take,
+                        ))
+                        toReturn -= take
+                    }
+                }
+
+                // Send bulk update to API
+                if (apiMoves.isNotEmpty()) {
+                    val request = com.riftcompanion.app.domain.model.InventoryBulkMoveRequest(
+                        idempotencyKey = "build_${preview.deckId}_${System.currentTimeMillis()}",
+                        moves = apiMoves,
+                    )
+                    cardNexusClient.bulkUpdateInventory(request).getOrThrow()
+                }
+
+                // Now update local DB to match API state
                 val updatedEntries = mutableListOf<DeckEntryEntity>()
+
+                // Process movements locally
                 for (movement in preview.movements) {
                     val sourceLines = inventoryLineDao.getLinesByCardSlug(movement.nameSlug)
                         .filter { it.locationName == movement.fromLocation }
@@ -1059,14 +1117,12 @@ class DeckViewModel @Inject constructor(
                         val take = minOf(toMove, line.quantity)
                         val newSourceQty = line.quantity - take
 
-                        // Update source line (reduce or remove)
                         if (newSourceQty > 0) {
                             inventoryLineDao.updateLocationAndQuantity(line.id, line.locationName, newSourceQty)
                         } else {
                             inventoryLineDao.updateLocationAndQuantity(line.id, line.locationName, 0)
                         }
 
-                        // Create line in deck location
                         val newLineId = "${movement.nameSlug}_${deckLocationNormalized}_${System.currentTimeMillis()}"
                         inventoryLineDao.insertAll(listOf(
                             InventoryLineEntity(
@@ -1090,7 +1146,7 @@ class DeckViewModel @Inject constructor(
                     }
                 }
 
-                // Process returns: move cards from deck location back to storage
+                // Process returns locally
                 for (returnMovement in preview.returns) {
                     val deckLines = inventoryLineDao.getLinesByCardSlug(returnMovement.nameSlug)
                         .filter { it.locationName?.trim()?.lowercase() == deckLocationNormalized }
@@ -1102,14 +1158,12 @@ class DeckViewModel @Inject constructor(
                         val take = minOf(toReturn, line.quantity)
                         val newDeckQty = line.quantity - take
 
-                        // Reduce/remove line at deck location
                         if (newDeckQty > 0) {
                             inventoryLineDao.updateLocationAndQuantity(line.id, line.locationName, newDeckQty)
                         } else {
                             inventoryLineDao.updateLocationAndQuantity(line.id, line.locationName, 0)
                         }
 
-                        // Add line at target storage location
                         val returnLocNorm = returnMovement.toLocation.trim().lowercase()
                         val existingReturnLine = inventoryLineDao.getLinesByCardSlug(returnMovement.nameSlug)
                             .find { it.locationName?.trim()?.lowercase() == returnLocNorm }
@@ -1148,12 +1202,10 @@ class DeckViewModel @Inject constructor(
                 val existingEntries = deckDao.getEntriesForDeck(preview.deckId)
                 for (entry in existingEntries) {
                     val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
-                    // Sum up how many were moved from storage for this card
                     val movedFromStorage = preview.movements
                         .filter { it.nameSlug == entry.nameSlug }
                         .sumOf { it.quantity }
                     if (zone == DeckZone.rune || zone == DeckZone.battlefield) {
-                        // Runes and battlefields: moved ones have source, rest created at deck location
                         updatedEntries.add(entry.copy(
                             isBuilt = true,
                             sourceLocationName = if (movedFromStorage > 0) preview.movements.first { it.nameSlug == entry.nameSlug }.fromLocation else null,
@@ -1168,7 +1220,7 @@ class DeckViewModel @Inject constructor(
                 deckDao.deleteEntriesForDeck(preview.deckId)
                 deckDao.insertEntries(updatedEntries)
 
-                // Create remaining rune/battlefield lines (shortfall after moving from storage) at deck location
+                // Create remaining rune/battlefield lines at deck location (these don't exist in API, they're local-only)
                 val allPrintings = cardPrintingDao.getAll().first().associateBy { it.nameSlug }
                 for (entry in existingEntries) {
                     val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
@@ -1177,7 +1229,6 @@ class DeckViewModel @Inject constructor(
                         val movedFromStorage = preview.movements
                             .filter { it.nameSlug == entry.nameSlug }
                             .sumOf { it.quantity }
-                        // Cards already at the deck location don't need to be created
                         val alreadyAtDeck = inventoryLineDao.getLinesByCardSlug(entry.nameSlug)
                             .filter { it.locationName?.trim()?.lowercase() == deckLocationNormalized }
                             .sumOf { it.quantity }
@@ -1336,13 +1387,41 @@ class DeckViewModel @Inject constructor(
                 // Build a map of nameSlug → destination
                 val entrySourceMap = entries.associate { it.nameSlug to (it.sourceLocationName ?: defaultDest) }
 
+                // Build API bulk update items
+                val apiMoves = mutableListOf<com.riftcompanion.app.domain.model.InventoryBulkMoveItem>()
+
                 for ((nameSlug, cardLines) in linesBySlug) {
                     if (nameSlug.isBlank()) continue
                     val dest = overrides[nameSlug] ?: entrySourceMap[nameSlug] ?: defaultDest
                     val totalQty = cardLines.sumOf { it.quantity }
                     if (totalQty <= 0) continue
 
-                    // Check if destination already has a line for this card
+                    for (line in cardLines) {
+                        if (line.quantity <= 0) continue
+                        apiMoves.add(com.riftcompanion.app.domain.model.InventoryBulkMoveItem(
+                            inventoryID = line.id,
+                            destinationLocationName = dest,
+                            count = line.quantity,
+                        ))
+                    }
+                }
+
+                // Send bulk update to API
+                if (apiMoves.isNotEmpty()) {
+                    val request = com.riftcompanion.app.domain.model.InventoryBulkMoveRequest(
+                        idempotencyKey = "disassemble_${deckId}_${System.currentTimeMillis()}",
+                        moves = apiMoves,
+                    )
+                    cardNexusClient.bulkUpdateInventory(request).getOrThrow()
+                }
+
+                // Now update local DB to match API state
+                for ((nameSlug, cardLines) in linesBySlug) {
+                    if (nameSlug.isBlank()) continue
+                    val dest = overrides[nameSlug] ?: entrySourceMap[nameSlug] ?: defaultDest
+                    val totalQty = cardLines.sumOf { it.quantity }
+                    if (totalQty <= 0) continue
+
                     val existingDestLine = inventoryLineDao.getLinesByCardSlug(nameSlug)
                         .find { it.locationName?.trim()?.lowercase() == dest.trim().lowercase() }
 
@@ -1365,7 +1444,6 @@ class DeckViewModel @Inject constructor(
                         ))
                     }
 
-                    // Remove from deck location
                     for (line in cardLines) {
                         inventoryLineDao.updateLocationAndQuantity(line.id, line.locationName, 0)
                     }
