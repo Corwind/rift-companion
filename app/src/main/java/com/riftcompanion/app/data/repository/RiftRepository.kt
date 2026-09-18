@@ -370,14 +370,37 @@ class RiftRepository @Inject constructor(
 
             // Refresh inventory from API to get the latest state
             val lines = cardNexusClient.fetchAllInventoryLines().getOrThrow()
-            val locations = cardNexusClient.fetchLocations().getOrThrow()
+            var locations = cardNexusClient.fetchLocations().getOrThrow()
             val printings = cardPrintingDao.getAll().first()
+            val localPolicies = locationPolicyDao.getAll().first()
 
             val printingsByProduct = printings.associateBy { it.productID }
             val printingNameByProductID = printings.associate { it.productID to it.nameSlug }
-            val destinationNames = locations.associate { it.name to it.name }
+            var destinationNames = locations.associate { it.name to it.name }
             // Case-insensitive lookup: policy names may differ in case from API names
-            val destinationNameByLower = locations.associate { it.name.lowercase() to it.name }
+            var destinationNameByLower = locations.associate { it.name.lowercase() to it.name }
+
+            // Ensure all local locations exist in the API — create any that are missing
+            for (policy in localPolicies) {
+                val policyLower = policy.name.lowercase()
+                if (policyLower !in destinationNameByLower && policy.name != "Unlocated") {
+                    // Location exists locally but not in API — create it
+                    cardNexusClient.upsertLocation(
+                        com.riftcompanion.app.domain.model.InventoryLocationUpsertRequest(
+                            name = policy.displayName.ifBlank { policy.name },
+                        ),
+                    )
+                    // Re-fetch locations to get the newly created one
+                    locations = cardNexusClient.fetchLocations().getOrThrow()
+                    destinationNames = locations.associate { it.name to it.name }
+                    destinationNameByLower = locations.associate { it.name.lowercase() to it.name }
+                }
+            }
+
+            // Resolve any location key to the actual API location name (case-insensitive)
+            fun resolveApiName(locKey: String): String {
+                return destinationNames[locKey] ?: destinationNameByLower[locKey.lowercase()] ?: locKey
+            }
 
             val linesByName = lines.groupBy { printingNameByProductID[it.productId] ?: "" }
 
@@ -428,9 +451,11 @@ class RiftRepository @Inject constructor(
                     val deficit = requested - (currentByLocation[locKey] ?: 0)
                     if (deficit <= 0) null
                     else if (locKey == "Unlocated") throw Exception("Cannot add cards to Unlocated.")
-                    else if (locKey !in destinationNames && locKey.lowercase() !in destinationNameByLower) throw Exception("Unknown destination '$locKey'.")
                     else {
-                        val apiName = destinationNames[locKey] ?: destinationNameByLower[locKey.lowercase()] ?: locKey
+                        val apiName = resolveApiName(locKey)
+                        if (apiName !in destinationNames && apiName.lowercase() !in destinationNameByLower) {
+                            throw Exception("Unknown destination '$locKey'.")
+                        }
                         Deficit(locKey, apiName, deficit)
                     }
                 }.sortedBy { it.locationKey }
