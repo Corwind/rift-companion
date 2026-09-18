@@ -169,6 +169,7 @@ class DeckViewModel @Inject constructor(
     private val cardPriceDao: com.riftcompanion.app.data.db.CardPriceDao,
     private val settingsDataStore: com.riftcompanion.app.data.prefs.SettingsDataStore,
     private val cardNexusClient: com.riftcompanion.app.data.api.CardNexusClient,
+    private val repository: com.riftcompanion.app.data.repository.RiftRepository,
 ) : ViewModel() {
 
     private val _deckListState = MutableStateFlow(DeckListUiState(isLoading = true))
@@ -937,15 +938,23 @@ class DeckViewModel @Inject constructor(
                 val isNewLocation = existingLocation == null
                 val deckLocationName = existingLocation ?: "${deck.name} (Deck)"
 
-                // Use display name from location policy or inventory location if available
-                val deckLocationDisplayName = run {
+                // Look up the actual location name and display name (existingLocation may be lowercase from a previous build)
+                val deckLocationDisplayName: String
+                val deckLocationNameResolved: String = run {
                     val policy = locationPolicyDao.getByName(deckLocationName.lowercase().trim())
                     if (policy != null) {
-                        policy.displayName.takeIf { it.isNotBlank() } ?: deckLocationName
+                        deckLocationDisplayName = policy.displayName.takeIf { it.isNotBlank() } ?: policy.name
+                        policy.name
                     } else {
                         val invLoc = inventoryLocationDao.getAll().first()
                             .find { it.name.equals(deckLocationName, ignoreCase = true) }
-                        invLoc?.displayName?.takeIf { it.isNotBlank() } ?: deckLocationName
+                        if (invLoc != null) {
+                            deckLocationDisplayName = invLoc.displayName?.takeIf { it.isNotBlank() } ?: invLoc.name
+                            invLoc.name
+                        } else {
+                            deckLocationDisplayName = deckLocationName
+                            deckLocationName
+                        }
                     }
                 }
 
@@ -1001,7 +1010,7 @@ class DeckViewModel @Inject constructor(
                     entries = entryInfos,
                     lines = allLines,
                     storageLocations = storageLocationNames,
-                    deckLocationName = deckLocationName,
+                    deckLocationName = deckLocationNameResolved,
                     deckLocationDisplayName = deckLocationDisplayName,
                     storageDisplayNames = storageDisplayNames,
                     isAlreadyBuilt = deck.state == "assembled",
@@ -1011,7 +1020,7 @@ class DeckViewModel @Inject constructor(
                     preview = DeckBuildPreview(
                         deckId = deckId,
                         deckName = deck.name,
-                        deckLocationName = deckLocationName,
+                        deckLocationName = deckLocationNameResolved,
                         deckLocationDisplayName = deckLocationDisplayName,
                         isNewLocation = isNewLocation,
                         movements = plan.movements.map { CardMovement(it.nameSlug, it.displayName, it.quantity, it.fromLocation, it.toLocation) },
@@ -1037,7 +1046,7 @@ class DeckViewModel @Inject constructor(
             val preview = _buildState.value.preview ?: return@launch
             _buildState.value = _buildState.value.copy(isLoading = true)
             try {
-                val deckLocationNormalized = preview.deckLocationName.lowercase().trim()
+                val deckLocationName = preview.deckLocationName
 
                 // Create deck location if new (both API + local)
                 if (preview.isNewLocation) {
@@ -1047,7 +1056,7 @@ class DeckViewModel @Inject constructor(
                         ),
                     )
                     locationPolicyDao.upsert(LocationPolicyEntity(
-                        name = deckLocationNormalized,
+                        name = deckLocationName,
                         displayName = preview.deckLocationName,
                         color = null,
                         icon = null,
@@ -1058,7 +1067,7 @@ class DeckViewModel @Inject constructor(
                     ))
                     inventoryLocationDao.insertAll(listOf(
                         InventoryLocationEntity(
-                            name = deckLocationNormalized,
+                            name = deckLocationName,
                             displayName = preview.deckLocationName,
                             color = null,
                             icon = null,
@@ -1081,7 +1090,7 @@ class DeckViewModel @Inject constructor(
                         // Move `take` cards from source to deck location via API
                         apiMoves.add(com.riftcompanion.app.domain.model.InventoryBulkMoveItem(
                             inventoryID = line.id,
-                            destinationLocationName = deckLocationNormalized,
+                            destinationLocationName = deckLocationName,
                             count = take,
                         ))
                         toMove -= take
@@ -1091,7 +1100,7 @@ class DeckViewModel @Inject constructor(
                 // Build API bulk update items for returns (deck → storage)
                 for (returnMovement in preview.returns) {
                     val deckLines = inventoryLineDao.getLinesByCardSlug(returnMovement.nameSlug)
-                        .filter { it.locationName?.trim()?.lowercase() == deckLocationNormalized }
+                        .filter { (it.locationName?.trim()?.equals(deckLocationName, ignoreCase = true) == true) }
                         .sortedBy { it.quantity }
 
                     var toReturn = returnMovement.quantity
@@ -1116,125 +1125,36 @@ class DeckViewModel @Inject constructor(
                     cardNexusClient.bulkUpdateInventory(request).getOrThrow()
                 }
 
-                // Now update local DB to match API state
-                val updatedEntries = mutableListOf<DeckEntryEntity>()
-
-                // Process movements locally
-                for (movement in preview.movements) {
-                    val sourceLines = inventoryLineDao.getLinesByCardSlug(movement.nameSlug)
-                        .filter { it.locationName == movement.fromLocation }
-                        .sortedBy { it.quantity }
-
-                    var toMove = movement.quantity
-                    for (line in sourceLines) {
-                        if (toMove <= 0) break
-                        val take = minOf(toMove, line.quantity)
-                        val newSourceQty = line.quantity - take
-
-                        if (newSourceQty > 0) {
-                            inventoryLineDao.updateLocationAndQuantity(line.id, line.locationName, newSourceQty)
-                        } else {
-                            inventoryLineDao.updateLocationAndQuantity(line.id, line.locationName, 0)
-                        }
-
-                        val newLineId = "${movement.nameSlug}_${deckLocationNormalized}_${System.currentTimeMillis()}"
-                        inventoryLineDao.insertAll(listOf(
-                            InventoryLineEntity(
-                                id = newLineId,
-                                customId = line.customId,
-                                productId = line.productId,
-                                finish = line.finish,
-                                condition = line.condition,
-                                language = line.language,
-                                quantity = take,
-                                locationName = deckLocationNormalized,
-                                tagsCsv = line.tagsCsv,
-                                comment = line.comment,
-                                notes = line.notes,
-                                forSale = false,
-                                updatedAt = System.currentTimeMillis().toString(),
-                            ),
-                        ))
-
-                        toMove -= take
-                    }
-                }
-
-                // Process returns locally
-                for (returnMovement in preview.returns) {
-                    val deckLines = inventoryLineDao.getLinesByCardSlug(returnMovement.nameSlug)
-                        .filter { it.locationName?.trim()?.lowercase() == deckLocationNormalized }
-                        .sortedBy { it.quantity }
-
-                    var toReturn = returnMovement.quantity
-                    for (line in deckLines) {
-                        if (toReturn <= 0) break
-                        val take = minOf(toReturn, line.quantity)
-                        val newDeckQty = line.quantity - take
-
-                        if (newDeckQty > 0) {
-                            inventoryLineDao.updateLocationAndQuantity(line.id, line.locationName, newDeckQty)
-                        } else {
-                            inventoryLineDao.updateLocationAndQuantity(line.id, line.locationName, 0)
-                        }
-
-                        val returnLocNorm = returnMovement.toLocation.trim().lowercase()
-                        val existingReturnLine = inventoryLineDao.getLinesByCardSlug(returnMovement.nameSlug)
-                            .find { it.locationName?.trim()?.lowercase() == returnLocNorm }
-                        if (existingReturnLine != null) {
-                            inventoryLineDao.updateLocationAndQuantity(
-                                existingReturnLine.id,
-                                existingReturnLine.locationName,
-                                existingReturnLine.quantity + take,
-                            )
-                        } else {
-                            val newLineId = "${returnMovement.nameSlug}_${returnLocNorm}_${System.currentTimeMillis()}"
-                            inventoryLineDao.insertAll(listOf(
-                                InventoryLineEntity(
-                                    id = newLineId,
-                                    customId = line.customId,
-                                    productId = line.productId,
-                                    finish = line.finish,
-                                    condition = line.condition,
-                                    language = line.language,
-                                    quantity = take,
-                                    locationName = returnMovement.toLocation,
-                                    tagsCsv = line.tagsCsv,
-                                    comment = line.comment,
-                                    notes = line.notes,
-                                    forSale = false,
-                                    updatedAt = System.currentTimeMillis().toString(),
-                                ),
-                            ))
-                        }
-
-                        toReturn -= take
-                    }
-                }
+                // Re-sync inventory from API to get real IDs and state
+                val syncedLines = cardNexusClient.fetchAllInventoryLines().getOrThrow()
+                inventoryLineDao.replaceApiLines(syncedLines.map { com.riftcompanion.app.data.db.EntityConverter.toEntity(it) })
+                val syncedLocations = cardNexusClient.fetchLocations().getOrThrow()
+                inventoryLocationDao.replaceAll(syncedLocations.map { com.riftcompanion.app.data.db.EntityConverter.toEntity(it) })
 
                 // Mark deck entries as built with source tracking
                 val existingEntries = deckDao.getEntriesForDeck(preview.deckId)
-                for (entry in existingEntries) {
+                val updatedEntries = existingEntries.map { entry ->
                     val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
                     val movedFromStorage = preview.movements
                         .filter { it.nameSlug == entry.nameSlug }
                         .sumOf { it.quantity }
                     if (zone == DeckZone.rune || zone == DeckZone.battlefield) {
-                        updatedEntries.add(entry.copy(
+                        entry.copy(
                             isBuilt = true,
                             sourceLocationName = if (movedFromStorage > 0) preview.movements.first { it.nameSlug == entry.nameSlug }.fromLocation else null,
-                        ))
+                        )
                     } else {
-                        updatedEntries.add(entry.copy(
+                        entry.copy(
                             isBuilt = true,
                             sourceLocationName = preview.movements.find { it.nameSlug == entry.nameSlug }?.fromLocation,
-                        ))
+                        )
                     }
                 }
                 deckDao.deleteEntriesForDeck(preview.deckId)
                 deckDao.insertEntries(updatedEntries)
 
-                // Create remaining rune/battlefield lines at deck location (these don't exist in API, they're local-only)
+                // Create local-only rune/battlefield lines that don't exist in the API inventory
+                // (runes/battlefields are conceptual — they may not have physical inventory lines)
                 val allPrintings = cardPrintingDao.getAll().first().associateBy { it.nameSlug }
                 for (entry in existingEntries) {
                     val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
@@ -1244,21 +1164,22 @@ class DeckViewModel @Inject constructor(
                             .filter { it.nameSlug == entry.nameSlug }
                             .sumOf { it.quantity }
                         val alreadyAtDeck = inventoryLineDao.getLinesByCardSlug(entry.nameSlug)
-                            .filter { it.locationName?.trim()?.lowercase() == deckLocationNormalized }
+                            .filter { (it.locationName?.trim()?.equals(deckLocationName, ignoreCase = true) == true) }
                             .sumOf { it.quantity }
                         val toCreate = entry.quantity - movedFromStorage - alreadyAtDeck
                         if (toCreate <= 0) continue
-                        val newLineId = "${entry.nameSlug}_${deckLocationNormalized}_${System.currentTimeMillis()}"
+                        // Use a deterministic local ID (not a fake API ID)
+                        val localLineId = "local_${entry.nameSlug}_${deckLocationName}"
                         inventoryLineDao.insertAll(listOf(
                             InventoryLineEntity(
-                                id = newLineId,
+                                id = localLineId,
                                 customId = null,
                                 productId = printing.productID,
                                 finish = "normal",
                                 condition = null,
                                 language = null,
                                 quantity = toCreate,
-                                locationName = deckLocationNormalized,
+                                locationName = deckLocationName,
                                 tagsCsv = "",
                                 comment = null,
                                 notes = null,
@@ -1429,39 +1350,11 @@ class DeckViewModel @Inject constructor(
                     cardNexusClient.bulkUpdateInventory(request).getOrThrow()
                 }
 
-                // Now update local DB to match API state
-                for ((nameSlug, cardLines) in linesBySlug) {
-                    if (nameSlug.isBlank()) continue
-                    val dest = overrides[nameSlug] ?: entrySourceMap[nameSlug] ?: defaultDest
-                    val totalQty = cardLines.sumOf { it.quantity }
-                    if (totalQty <= 0) continue
-
-                    val existingDestLine = inventoryLineDao.getLinesByCardSlug(nameSlug)
-                        .find { it.locationName?.trim()?.lowercase() == dest.trim().lowercase() }
-
-                    if (existingDestLine != null) {
-                        inventoryLineDao.updateLocationAndQuantity(
-                            existingDestLine.id,
-                            existingDestLine.locationName,
-                            existingDestLine.quantity + totalQty,
-                        )
-                    } else {
-                        val firstLine = cardLines.first()
-                        val newLineId = "${nameSlug}_${dest.trim().lowercase()}_${System.currentTimeMillis()}"
-                        inventoryLineDao.insertAll(listOf(
-                            firstLine.copy(
-                                id = newLineId,
-                                locationName = dest,
-                                quantity = totalQty,
-                                updatedAt = System.currentTimeMillis().toString(),
-                            ),
-                        ))
-                    }
-
-                    for (line in cardLines) {
-                        inventoryLineDao.updateLocationAndQuantity(line.id, line.locationName, 0)
-                    }
-                }
+                // Re-sync inventory from API to get real IDs and state
+                val syncedLines = cardNexusClient.fetchAllInventoryLines().getOrThrow()
+                inventoryLineDao.replaceApiLines(syncedLines.map { com.riftcompanion.app.data.db.EntityConverter.toEntity(it) })
+                val syncedLocations = cardNexusClient.fetchLocations().getOrThrow()
+                inventoryLocationDao.replaceAll(syncedLocations.map { com.riftcompanion.app.data.db.EntityConverter.toEntity(it) })
 
                 // Mark entries as not built
                 val updatedEntries = entries.map { it.copy(isBuilt = false, sourceLocationName = null) }
