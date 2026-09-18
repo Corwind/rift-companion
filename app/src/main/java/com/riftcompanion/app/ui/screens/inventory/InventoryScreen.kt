@@ -1011,7 +1011,7 @@ private fun InventoryListRow(card: InventoryCardSummary, isBanned: Boolean, onCl
                 )
                 card.priceEur?.let {
                     Text(
-                        text = "€${String.format("%.2f", it)}",
+                        text = "€%.2f".format(it),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
