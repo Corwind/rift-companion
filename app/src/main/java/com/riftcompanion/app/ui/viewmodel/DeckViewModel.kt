@@ -1118,11 +1118,13 @@ class DeckViewModel @Inject constructor(
                     for (line in deckLines) {
                         if (toReturn <= 0) break
                         val take = minOf(toReturn, line.quantity)
-                        apiMoves.add(com.riftcompanion.app.domain.model.InventoryBulkMoveItem(
-                            inventoryID = line.id,
-                            destinationLocationName = returnMovement.toLocation,
-                            count = take,
-                        ))
+                        if (!line.id.startsWith("local_")) {
+                            apiMoves.add(com.riftcompanion.app.domain.model.InventoryBulkMoveItem(
+                                inventoryID = line.id,
+                                destinationLocationName = returnMovement.toLocation,
+                                count = take,
+                            ))
+                        }
                         toReturn -= take
                     }
                 }
@@ -1164,41 +1166,41 @@ class DeckViewModel @Inject constructor(
                 deckDao.deleteEntriesForDeck(preview.deckId)
                 deckDao.insertEntries(updatedEntries)
 
-                // Create local-only rune/battlefield lines that don't exist in the API inventory
-                // (runes/battlefields are conceptual — they may not have physical inventory lines)
+                // Create local-only lines for cards that don't exist in the API inventory:
+                // - Runes/battlefields (conceptual, never in API)
+                // - Missing cards (user doesn't own them but wants to build/proxy)
                 val allPrintings = cardPrintingDao.getAll().first().associateBy { it.nameSlug }
                 for (entry in existingEntries) {
                     val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
-                    if (zone == DeckZone.rune || zone == DeckZone.battlefield) {
-                        val printing = allPrintings[entry.nameSlug] ?: continue
-                        val movedFromStorage = preview.movements
-                            .filter { it.nameSlug == entry.nameSlug }
-                            .sumOf { it.quantity }
-                        val alreadyAtDeck = inventoryLineDao.getLinesByCardSlug(entry.nameSlug)
-                            .filter { (it.locationName?.trim()?.equals(deckLocationName, ignoreCase = true) == true) }
-                            .sumOf { it.quantity }
-                        val toCreate = entry.quantity - movedFromStorage - alreadyAtDeck
-                        if (toCreate <= 0) continue
-                        // Use a deterministic local ID (not a fake API ID)
-                        val localLineId = "local_${entry.nameSlug}_${deckLocationName}"
-                        inventoryLineDao.insertAll(listOf(
-                            InventoryLineEntity(
-                                id = localLineId,
-                                customId = null,
-                                productId = printing.productID,
-                                finish = "normal",
-                                condition = null,
-                                language = null,
-                                quantity = toCreate,
-                                locationName = deckLocationName,
-                                tagsCsv = "",
-                                comment = null,
+                    val isRuneOrBattlefield = zone == DeckZone.rune || zone == DeckZone.battlefield
+                    val printing = allPrintings[entry.nameSlug] ?: continue
+                    val movedFromStorage = preview.movements
+                        .filter { it.nameSlug == entry.nameSlug }
+                        .sumOf { it.quantity }
+                    val alreadyAtDeck = inventoryLineDao.getLinesByCardSlug(entry.nameSlug)
+                        .filter { (it.locationName?.trim()?.equals(deckLocationName, ignoreCase = true) == true) }
+                        .sumOf { it.quantity }
+                    val toCreate = entry.quantity - movedFromStorage - alreadyAtDeck
+                    if (toCreate <= 0) continue
+                    // Use a deterministic local ID (not a fake API ID)
+                    val localLineId = "local_${entry.nameSlug}_${deckLocationName}"
+                    inventoryLineDao.insertAll(listOf(
+                        InventoryLineEntity(
+                            id = localLineId,
+                            customId = null,
+                            productId = printing.productID,
+                            finish = "normal",
+                            condition = null,
+                            language = null,
+                            quantity = toCreate,
+                            locationName = deckLocationName,
+                            tagsCsv = "",
+                            comment = null,
                                 notes = null,
                                 forSale = false,
                                 updatedAt = System.currentTimeMillis().toString(),
                             ),
                         ))
-                    }
                 }
 
                 // Link location to deck and mark as assembled
@@ -1333,8 +1335,9 @@ class DeckViewModel @Inject constructor(
                 // Build a map of nameSlug → destination
                 val entrySourceMap = entries.associate { it.nameSlug to (it.sourceLocationName ?: defaultDest) }
 
-                // Build API bulk update items
+                // Build API bulk update items — only for lines that exist in the API (non-local IDs)
                 val apiMoves = mutableListOf<com.riftcompanion.app.domain.model.InventoryBulkMoveItem>()
+                val localLineIds = mutableListOf<String>()
 
                 for ((nameSlug, cardLines) in linesBySlug) {
                     if (nameSlug.isBlank()) continue
@@ -1344,11 +1347,17 @@ class DeckViewModel @Inject constructor(
 
                     for (line in cardLines) {
                         if (line.quantity <= 0) continue
-                        apiMoves.add(com.riftcompanion.app.domain.model.InventoryBulkMoveItem(
-                            inventoryID = line.id,
-                            destinationLocationName = dest,
-                            count = line.quantity,
-                        ))
+                        if (line.id.startsWith("local_")) {
+                            // Local-only line (runes/battlefields) — not in API, just track for local deletion
+                            localLineIds.add(line.id)
+                        } else {
+                            // Real API line — move it to destination via API
+                            apiMoves.add(com.riftcompanion.app.domain.model.InventoryBulkMoveItem(
+                                inventoryID = line.id,
+                                destinationLocationName = dest,
+                                count = line.quantity,
+                            ))
+                        }
                     }
                 }
 
@@ -1359,6 +1368,11 @@ class DeckViewModel @Inject constructor(
                         moves = apiMoves,
                     )
                     cardNexusClient.bulkUpdateInventory(request).getOrThrow()
+                }
+
+                // Delete local-only lines (runes/battlefields that were never in the API)
+                for (localId in localLineIds) {
+                    inventoryLineDao.updateLocationAndQuantity(localId, inventoryLineDao.getByLocation(deckLocation).find { it.id == localId }?.locationName ?: deckLocation, 0)
                 }
 
                 // Re-sync inventory from API to get real IDs and state

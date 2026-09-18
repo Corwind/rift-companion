@@ -268,14 +268,14 @@ private fun BuildPreviewContent(
         Button(
             onClick = onBuild,
             modifier = Modifier.weight(2f),
-            enabled = !isLoading && !hasMissing,
+            enabled = !isLoading,
         ) {
             if (isLoading) {
                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
             } else {
                 Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.size(8.dp))
-                Text(if (hasMissing) "Can't build (missing)" else if (isAlreadyBuilt) "Rebuild" else "Build Deck")
+                Text(if (isAlreadyBuilt) "Rebuild" else "Build Deck")
             }
         }
     }
