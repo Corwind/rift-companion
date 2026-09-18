@@ -152,12 +152,6 @@ fun DeckStatsScreen(
             SectionTitle("Deck Value")
             ThemedCardSurface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), cornerRadius = 12) {
                 Column(modifier = Modifier.padding(14.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.AttachMoney, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Market Price", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
-                    }
-                    Spacer(Modifier.height(8.dp))
                     if (showEur) stats.totalValueEur?.let {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Cardmarket", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
