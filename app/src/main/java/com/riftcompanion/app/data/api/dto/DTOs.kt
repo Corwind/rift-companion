@@ -118,3 +118,68 @@ data class CardNexusAPIErrorEnvelope(
     val message: String,
     val data: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
 )
+
+// ── Price feed DTOs ────────────────────────────────────────────────────
+
+@Serializable
+data class PriceFeedMetadataDTO(
+    val feedType: String,
+    val url: String,
+    val checksum: String,
+    val recordCount: Int,
+    val encoding: String,
+    val generatedAt: String,
+    val lastRefreshedAt: String? = null,
+)
+
+@Serializable
+data class PriceFeedProductDTO(
+    val productId: Long,
+    val pricesByFinish: Map<String, PriceFeedFinishDTO> = emptyMap(),
+)
+
+@Serializable
+data class PriceFeedFinishDTO(
+    val cardmarket: PriceFeedCardmarketDTO? = null,
+    val tcgplayer: PriceFeedTcgplayerDTO? = null,
+    val cardnexus: PriceFeedCardnexusDTO? = null,
+)
+
+@Serializable
+data class PriceFeedCardmarketDTO(
+    val currency: String? = null,
+    val low: Double? = null,
+    val mid: Double? = null,
+    val high: Double? = null,
+    val marketValue: Double? = null,
+    val change24h: Double? = null,
+    val change7d: Double? = null,
+    val change30d: Double? = null,
+    val date: String? = null,
+)
+
+@Serializable
+data class PriceFeedTcgplayerDTO(
+    val currency: String? = null,
+    val low: Double? = null,
+    val mid: Double? = null,
+    val high: Double? = null,
+    val marketValue: Double? = null,
+    val change24h: Double? = null,
+    val change7d: Double? = null,
+    val change30d: Double? = null,
+    val date: String? = null,
+)
+
+@Serializable
+data class PriceFeedCardnexusDTO(
+    val low: PriceFeedCardnexusLowDTO? = null,
+    val listingCount: Int? = null,
+    val availableQuantity: Int? = null,
+)
+
+@Serializable
+data class PriceFeedCardnexusLowDTO(
+    val amount: Double? = null,
+    val currency: String? = null,
+)

@@ -157,6 +157,55 @@ class CardNexusClient @Inject constructor(
         }
     }
 
+    suspend fun fetchPriceFeedMetadata(): Result<com.riftcompanion.app.data.api.dto.PriceFeedMetadataDTO> = withContext(Dispatchers.IO) {
+        runCatching {
+            val request = authRequestBuilder(BASE_URL + "feeds/$GAME/prices").build()
+            val response = okHttpClient.newCall(request).execute()
+            if (!response.isSuccessful) {
+                throw httpError(response.code, response.body?.string())
+            }
+            val dto = json.decodeFromString(
+                com.riftcompanion.app.data.api.dto.PriceFeedMetadataDTO.serializer(),
+                response.body!!.string(),
+            )
+            response.close()
+            dto
+        }
+    }
+
+    suspend fun downloadPriceFeed(url: String, encoding: String): Result<Sequence<com.riftcompanion.app.data.api.dto.PriceFeedProductDTO>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val request = Request.Builder()
+                .url(url)
+                .header("Accept", "application/gzip, application/x-ndjson, application/octet-stream")
+                .build()
+            val response = okHttpClient.newCall(request).execute()
+            if (!response.isSuccessful) {
+                throw httpError(response.code, response.body?.string())
+            }
+            val body = response.body!!
+            val stream = when (encoding.lowercase()) {
+                "gzip", "x-gzip", "application/gzip" -> GZIPInputStream(body.byteStream())
+                else -> body.byteStream()
+            }
+            sequence {
+                BufferedReader(InputStreamReader(stream)).use { reader ->
+                    var line = reader.readLine()
+                    while (line != null) {
+                        if (line.isNotBlank()) {
+                            val dto = json.decodeFromString(
+                                com.riftcompanion.app.data.api.dto.PriceFeedProductDTO.serializer(),
+                                line,
+                            )
+                            yield(dto)
+                        }
+                        line = reader.readLine()
+                    }
+                }
+            }
+        }
+    }
+
     suspend fun upsertLocation(request: InventoryLocationUpsertRequest): Result<InventoryLocation> = withContext(Dispatchers.IO) {
         runCatching {
             val dto = com.riftcompanion.app.data.api.dto.InventoryLocationUpsertDTO(

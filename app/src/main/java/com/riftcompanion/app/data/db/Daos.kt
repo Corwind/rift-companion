@@ -151,6 +151,31 @@ interface LocationPolicyDao {
 }
 
 @Dao
+interface CardPriceDao {
+
+    @Query("SELECT * FROM card_prices")
+    fun getAll(): Flow<List<CardPriceEntity>>
+
+    @Query("SELECT * FROM card_prices WHERE productID = :productId LIMIT 1")
+    suspend fun getByProductId(productId: Long): CardPriceEntity?
+
+    @Query("SELECT * FROM card_prices WHERE nameSlug = :nameSlug")
+    suspend fun getByNameSlug(nameSlug: String): List<CardPriceEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(entities: List<CardPriceEntity>)
+
+    @Query("DELETE FROM card_prices")
+    suspend fun deleteAll()
+
+    @Transaction
+    suspend fun replaceAll(entities: List<CardPriceEntity>) {
+        deleteAll()
+        insertAll(entities)
+    }
+}
+
+@Dao
 interface SyncMetadataDao {
 
     @Query("SELECT value FROM sync_metadata WHERE key = :key")
