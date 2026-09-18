@@ -31,7 +31,6 @@ class SettingsDataStore @Inject constructor(
         val SETUP_COMPLETE_KEY = booleanPreferencesKey("setup_complete")
         val DATA_WARNING_ACK_KEY = booleanPreferencesKey("data_warning_acked")
         val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
-        val LLM_PRIORITY_KEY = stringPreferencesKey("llm_priority")
         val PRICE_MARKET_KEY = stringPreferencesKey("price_currency")
     }
 
@@ -45,7 +44,6 @@ class SettingsDataStore @Inject constructor(
             setupComplete = prefs[SETUP_COMPLETE_KEY] ?: false,
             dataWarningAcked = prefs[DATA_WARNING_ACK_KEY] ?: false,
             geminiApiKey = prefs[GEMINI_API_KEY],
-            llmPriority = prefs[LLM_PRIORITY_KEY]?.let { runCatching { LlmPriority.valueOf(it) }.getOrNull() } ?: LlmPriority.CloudFirst,
             priceMarket = prefs[PRICE_MARKET_KEY]?.let { runCatching { PriceMarket.valueOf(it) }.getOrNull() } ?: PriceMarket.EUR,
         )
     }
@@ -89,10 +87,6 @@ class SettingsDataStore @Inject constructor(
         return context.dataStore.data.first()[GEMINI_API_KEY]
     }
 
-    suspend fun setLlmPriority(value: LlmPriority) {
-        context.dataStore.edit { it[LLM_PRIORITY_KEY] = value.name }
-    }
-
     suspend fun setPriceMarket(value: PriceMarket) {
         context.dataStore.edit { it[PRICE_MARKET_KEY] = value.name }
     }
@@ -107,14 +101,8 @@ data class SettingsData(
     val setupComplete: Boolean = false,
     val dataWarningAcked: Boolean = false,
     val geminiApiKey: String? = null,
-    val llmPriority: LlmPriority = LlmPriority.CloudFirst,
     val priceMarket: PriceMarket = PriceMarket.EUR,
 )
-
-enum class LlmPriority(val title: String, val description: String) {
-    CloudFirst("Cloud first", "On-device AI → Cloud API"),
-    PrivacyFirst("Privacy first", "On-device AI → Cloud API"),
-}
 
 enum class PriceMarket(val title: String, val description: String, val symbol: String, val code: String) {
     EUR("Cardmarket", "Show Cardmarket prices in euros", "€", "EUR"),

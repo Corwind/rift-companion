@@ -1,7 +1,6 @@
 package com.riftcompanion.app.data.ai
 
 import android.util.Log
-import com.riftcompanion.app.data.prefs.LlmPriority
 import com.riftcompanion.app.data.prefs.SettingsDataStore
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
@@ -47,15 +46,9 @@ class RulesAiService @Inject constructor(
         val onDevice = geminiNanoService.isAvailable()
         val cloud = geminiCloudService.isAvailable(settings.geminiApiKey)
 
-        val chain = when (settings.llmPriority) {
-            LlmPriority.CloudFirst -> buildList {
-                add(BackendStep(Backend.OnDevice, onDevice))
-                add(BackendStep(Backend.Cloud, cloud))
-            }
-            LlmPriority.PrivacyFirst -> buildList {
-                add(BackendStep(Backend.OnDevice, onDevice))
-                add(BackendStep(Backend.Cloud, cloud))
-            }
+        val chain = buildList {
+            add(BackendStep(Backend.OnDevice, onDevice))
+            add(BackendStep(Backend.Cloud, cloud))
         }
 
         for (step in chain) {

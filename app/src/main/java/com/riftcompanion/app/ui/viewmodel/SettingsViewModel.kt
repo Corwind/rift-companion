@@ -38,7 +38,6 @@ data class SettingsUiState(
     val showDataWarning: Boolean = false,
     val geminiApiKey: String? = null,
     val hasGeminiApiKey: Boolean = false,
-    val llmPriority: com.riftcompanion.app.data.prefs.LlmPriority = com.riftcompanion.app.data.prefs.LlmPriority.CloudFirst,
     val priceMarket: com.riftcompanion.app.data.prefs.PriceMarket = com.riftcompanion.app.data.prefs.PriceMarket.EUR,
 )
 
@@ -70,7 +69,6 @@ class SettingsViewModel @Inject constructor(
                     dataWarningAcked = data.dataWarningAcked,
                     geminiApiKey = data.geminiApiKey,
                     hasGeminiApiKey = !data.geminiApiKey.isNullOrBlank(),
-                    llmPriority = data.llmPriority,
                     priceMarket = data.priceMarket,
                 )
             }
@@ -112,10 +110,6 @@ class SettingsViewModel @Inject constructor(
 
     fun setGeminiApiKey(value: String) {
         viewModelScope.launch { settingsDataStore.setGeminiApiKey(value) }
-    }
-
-    fun setLlmPriority(value: com.riftcompanion.app.data.prefs.LlmPriority) {
-        viewModelScope.launch { settingsDataStore.setLlmPriority(value) }
     }
 
     fun setPriceMarket(value: com.riftcompanion.app.data.prefs.PriceMarket) {
