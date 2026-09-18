@@ -47,6 +47,7 @@ fun DeckStatsScreen(
     viewModel: DeckViewModel = hiltViewModel(),
 ) {
     val detailState by viewModel.deckDetailState.collectAsStateWithLifecycle()
+    val priceMarket by viewModel.priceMarket.collectAsStateWithLifecycle()
 
     androidx.compose.runtime.LaunchedEffect(deckId) {
         viewModel.loadDeckDetail(deckId)
@@ -144,22 +145,34 @@ fun DeckStatsScreen(
         }
 
         // Deck value
-        if (stats.totalValueEur != null || stats.totalValueUsd != null) {
+        val showEur = priceMarket == com.riftcompanion.app.data.prefs.PriceMarket.EUR || priceMarket == com.riftcompanion.app.data.prefs.PriceMarket.BOTH
+        val showUsd = priceMarket == com.riftcompanion.app.data.prefs.PriceMarket.USD || priceMarket == com.riftcompanion.app.data.prefs.PriceMarket.BOTH
+        if ((showEur && stats.totalValueEur != null) || (showUsd && stats.totalValueUsd != null)) {
             Spacer(Modifier.height(16.dp))
             SectionTitle("Deck Value")
-            stats.totalValueEur?.let {
-                StatCard(
-                    icon = { Icon(Icons.Default.AttachMoney, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
-                    label = "Cardmarket",
-                    value = "€%.2f".format(it),
-                )
-            }
-            stats.totalValueUsd?.let {
-                StatCard(
-                    icon = { Icon(Icons.Default.AttachMoney, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
-                    label = "TCGplayer",
-                    value = "\$%.2f".format(it),
-                )
+            ThemedCardSurface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), cornerRadius = 12) {
+                Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.AttachMoney, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    if (showEur && stats.totalValueEur != null && showUsd && stats.totalValueUsd != null) {
+                        Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column {
+                                Text("Cardmarket", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("€%.2f".format(stats.totalValueEur), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("TCGplayer", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("$%.2f".format(stats.totalValueUsd), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+                    } else if (showEur && stats.totalValueEur != null) {
+                        Text("Cardmarket", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                        Text("€%.2f".format(stats.totalValueEur), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+                    } else if (showUsd && stats.totalValueUsd != null) {
+                        Text("TCGplayer", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                        Text("$%.2f".format(stats.totalValueUsd), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
             }
         }
 

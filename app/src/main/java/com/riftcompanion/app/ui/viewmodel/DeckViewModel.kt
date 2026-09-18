@@ -27,6 +27,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
@@ -163,6 +166,7 @@ class DeckViewModel @Inject constructor(
     private val inventoryLocationDao: InventoryLocationDao,
     private val locationPolicyDao: LocationPolicyDao,
     private val cardPriceDao: com.riftcompanion.app.data.db.CardPriceDao,
+    private val settingsDataStore: com.riftcompanion.app.data.prefs.SettingsDataStore,
 ) : ViewModel() {
 
     private val _deckListState = MutableStateFlow(DeckListUiState(isLoading = true))
@@ -179,6 +183,10 @@ class DeckViewModel @Inject constructor(
 
     private val _disassembleState = MutableStateFlow(DisassembleUiState())
     val disassembleState: StateFlow<DisassembleUiState> = _disassembleState.asStateFlow()
+
+    val priceMarket: StateFlow<com.riftcompanion.app.data.prefs.PriceMarket> =
+        settingsDataStore.settingsFlow.map { it.priceMarket }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.riftcompanion.app.data.prefs.PriceMarket.EUR)
 
     private var loadDecksJob: kotlinx.coroutines.Job? = null
 
