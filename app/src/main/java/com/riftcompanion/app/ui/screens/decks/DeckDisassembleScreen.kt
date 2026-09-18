@@ -169,7 +169,7 @@ private fun DisassembleContent(
     val overrides = remember { mutableStateMapOf<String, String>() }
 
     fun destFor(card: DisassembleCardInfo): String {
-        return overrides[card.nameSlug] ?: defaultDest
+        return overrides[card.nameSlug] ?: card.suggestedDestination ?: defaultDest
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
