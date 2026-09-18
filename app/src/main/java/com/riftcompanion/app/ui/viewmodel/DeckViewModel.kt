@@ -1173,6 +1173,7 @@ class DeckViewModel @Inject constructor(
                     val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
                     val isRuneOrBattlefield = zone == DeckZone.rune || zone == DeckZone.battlefield
                     val printing = allPrintings[entry.nameSlug] ?: continue
+                    val finish = printing.finishesCsv.split(",").firstOrNull()?.trim()?.ifBlank { null } ?: "Standard"
                     val movedFromStorage = preview.movements
                         .filter { it.nameSlug == entry.nameSlug }
                         .sumOf { it.quantity }
@@ -1184,11 +1185,11 @@ class DeckViewModel @Inject constructor(
                     // For runes/battlefields, create in API. For other cards, only if they're missing (shouldn't happen since build is blocked by missing cards, but just in case)
                     linesToCreate.add(com.riftcompanion.app.data.api.CardNexusClient.InventoryLineCreate(
                         productId = printing.productID,
-                        finish = "normal",
+                        finish = finish,
                         quantity = toCreate,
                         location = deckLocationName,
                         condition = "NM",
-                        language = null,
+                        language = "en",
                     ))
                 }
                 if (linesToCreate.isNotEmpty()) {
