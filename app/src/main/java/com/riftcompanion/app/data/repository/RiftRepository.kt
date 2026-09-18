@@ -376,6 +376,8 @@ class RiftRepository @Inject constructor(
             val printingsByProduct = printings.associateBy { it.productID }
             val printingNameByProductID = printings.associate { it.productID to it.nameSlug }
             val destinationNames = locations.associate { it.name to it.name }
+            // Case-insensitive lookup: policy names may differ in case from API names
+            val destinationNameByLower = locations.associate { it.name.lowercase() to it.name }
 
             val linesByName = lines.groupBy { printingNameByProductID[it.productId] ?: "" }
 
@@ -426,8 +428,11 @@ class RiftRepository @Inject constructor(
                     val deficit = requested - (currentByLocation[locKey] ?: 0)
                     if (deficit <= 0) null
                     else if (locKey == "Unlocated") throw Exception("Cannot add cards to Unlocated.")
-                    else if (locKey !in destinationNames) throw Exception("Unknown destination '$locKey'.")
-                    else Deficit(locKey, locKey, deficit)
+                    else if (locKey !in destinationNames && locKey.lowercase() !in destinationNameByLower) throw Exception("Unknown destination '$locKey'.")
+                    else {
+                        val apiName = destinationNames[locKey] ?: destinationNameByLower[locKey.lowercase()] ?: locKey
+                        Deficit(locKey, apiName, deficit)
+                    }
                 }.sortedBy { it.locationKey }
 
                 var surplusByLocation = currentByLocation.mapNotNull { (locKey, current) ->
