@@ -97,6 +97,15 @@ interface InventoryLineDao {
     suspend fun deleteAll()
 
     @Transaction
+    @Query("DELETE FROM inventory_lines WHERE id NOT LIKE 'local_%'")
+    suspend fun deleteApiLines()
+
+    @Transaction
+    suspend fun replaceApiLines(entities: List<InventoryLineEntity>) {
+        deleteApiLines()
+        insertAll(entities)
+    }
+
     suspend fun replaceAll(entities: List<InventoryLineEntity>) {
         deleteAll()
         insertAll(entities)

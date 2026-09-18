@@ -106,7 +106,7 @@ class RiftRepository @Inject constructor(
             val lines = cardNexusClient.fetchAllInventoryLines().getOrThrow()
             val locations = cardNexusClient.fetchLocations().getOrThrow()
 
-            inventoryLineDao.replaceAll(lines.map { EntityConverter.toEntity(it) })
+            inventoryLineDao.replaceApiLines(lines.map { EntityConverter.toEntity(it) })
             inventoryLocationDao.replaceAll(locations.map { EntityConverter.toEntity(it) })
 
             // 5. Auto-create location policies for new locations
@@ -557,7 +557,7 @@ class RiftRepository @Inject constructor(
             // Refresh local DB after writes
             val refreshedLines = cardNexusClient.fetchAllInventoryLines().getOrThrow()
             val refreshedLocations = cardNexusClient.fetchLocations().getOrThrow()
-            inventoryLineDao.replaceAll(refreshedLines.map { EntityConverter.toEntity(it) })
+            inventoryLineDao.replaceApiLines(refreshedLines.map { EntityConverter.toEntity(it) })
             inventoryLocationDao.replaceAll(refreshedLocations.map { EntityConverter.toEntity(it) })
 
             InventoryQuantityEditResult(
