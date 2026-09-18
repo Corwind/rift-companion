@@ -71,6 +71,8 @@ data class DeckEntryDisplay(
     val domains: List<String> = emptyList(),
     val energyCost: Int? = null,
     val might: Int? = null,
+    val priceEur: Double? = null,
+    val priceUsd: Double? = null,
     // Availability info for deck building
     val availableInStorage: Int = 0,
     val inDeckLocation: Int = 0,
@@ -160,6 +162,7 @@ class DeckViewModel @Inject constructor(
     private val inventoryLineDao: InventoryLineDao,
     private val inventoryLocationDao: InventoryLocationDao,
     private val locationPolicyDao: LocationPolicyDao,
+    private val cardPriceDao: com.riftcompanion.app.data.db.CardPriceDao,
 ) : ViewModel() {
 
     private val _deckListState = MutableStateFlow(DeckListUiState(isLoading = true))
@@ -294,6 +297,8 @@ class DeckViewModel @Inject constructor(
                     domains = identity?.domainsCsv?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
                     energyCost = identity?.energyCost,
                     might = identity?.might,
+                    priceEur = printings.firstNotNullOfOrNull { cardPriceDao.getByProductId(it.productID) }?.cardmarketMarketValue,
+                    priceUsd = printings.firstNotNullOfOrNull { cardPriceDao.getByProductId(it.productID) }?.tcgplayerMarketValue,
                     availableInStorage = availability.availableInStorage,
                     inDeckLocation = availability.inDeckLocation,
                     inOtherDecks = availability.inOtherDecks,
@@ -1426,6 +1431,8 @@ class DeckViewModel @Inject constructor(
                 domains = identity?.domainsCsv?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
                 energyCost = identity?.energyCost,
                 might = identity?.might,
+                priceEur = printings.firstNotNullOfOrNull { cardPriceDao.getByProductId(it.productID) }?.cardmarketMarketValue,
+                priceUsd = printings.firstNotNullOfOrNull { cardPriceDao.getByProductId(it.productID) }?.tcgplayerMarketValue,
                 availableInStorage = availability.availableInStorage,
                 inDeckLocation = availability.inDeckLocation,
                 inOtherDecks = availability.inOtherDecks,

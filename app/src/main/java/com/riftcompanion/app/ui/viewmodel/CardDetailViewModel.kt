@@ -37,6 +37,7 @@ data class CardDetail(
     val priceEur: Double? = null,
     val priceUsd: Double? = null,
     val priceChange7d: Double? = null,
+    val priceMarket: com.riftcompanion.app.data.prefs.PriceMarket = com.riftcompanion.app.data.prefs.PriceMarket.EUR,
 )
 
 data class CardDetailUiState(
@@ -58,6 +59,7 @@ class CardDetailViewModel @Inject constructor(
     private val inventoryLocationDao: InventoryLocationDao,
     private val locationPolicyDao: LocationPolicyDao,
     private val cardPriceDao: com.riftcompanion.app.data.db.CardPriceDao,
+    private val settingsDataStore: com.riftcompanion.app.data.prefs.SettingsDataStore,
     private val repository: RiftRepository,
 ) : ViewModel() {
 
@@ -182,6 +184,7 @@ class CardDetailViewModel @Inject constructor(
                     priceEur = price?.cardmarketMarketValue,
                     priceUsd = price?.tcgplayerMarketValue,
                     priceChange7d = price?.cardmarketChange7d,
+                    priceMarket = settingsDataStore.settingsFlow.first().priceMarket,
                 ),
                 isLoading = false,
                 locationsForEditing = editableLocations,
