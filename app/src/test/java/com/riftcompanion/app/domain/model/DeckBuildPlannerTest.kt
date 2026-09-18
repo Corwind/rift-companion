@@ -255,6 +255,56 @@ class DeckBuildPlannerTest {
     }
 
     @Test
+    fun `same card in main and sideboard merges into single movement`() {
+        // 2 copies in main + 1 in sideboard = 3 total from same storage location
+        val plan = DeckBuildPlanner.computePlan(
+            entries = listOf(
+                entry("card-a", qty = 2, zone = DeckZone.main),
+                entry("card-a", qty = 1, zone = DeckZone.sideboard),
+            ),
+            lines = listOf(
+                line("card-a", "Red Box", 5),
+            ),
+            storageLocations = storage,
+            deckLocationName = deckLoc,
+            deckLocationDisplayName = deckDisplay,
+            storageDisplayNames = storageDisplay,
+            isAlreadyBuilt = false,
+        )
+        // Should be 1 movement of 3 copies from Red Box, not 2 separate movements
+        assertEquals(1, plan.movements.size)
+        assertEquals(3, plan.movements[0].quantity)
+        assertEquals("Red Box", plan.movements[0].fromLocation)
+    }
+
+    @Test
+    fun `same card from different locations stays as separate movements`() {
+        // 2 copies in main + 1 in sideboard, both from Grey Box (alphabetically first with enough stock)
+        // Red Box has 1, Grey Box has 3 — main takes 2 from Grey Box, sideboard takes 1 from Grey Box
+        // Merged into 1 movement of 3 from Grey Box
+        val plan = DeckBuildPlanner.computePlan(
+            entries = listOf(
+                entry("card-a", qty = 2, zone = DeckZone.main),
+                entry("card-a", qty = 1, zone = DeckZone.sideboard),
+            ),
+            lines = listOf(
+                line("card-a", "Red Box", 1),
+                line("card-a", "Grey Box", 3),
+            ),
+            storageLocations = storage,
+            deckLocationName = deckLoc,
+            deckLocationDisplayName = deckDisplay,
+            storageDisplayNames = storageDisplay,
+            isAlreadyBuilt = false,
+        )
+        // Grey Box is alphabetically first and has enough (3), so both entries take from it
+        // Merged into 1 movement of 3 from Grey Box
+        assertEquals(1, plan.movements.size)
+        assertEquals(3, plan.movements[0].quantity)
+        assertEquals("Grey Box", plan.movements[0].fromLocation)
+    }
+
+    @Test
     fun `planned deck with cards at deck location and shortfall in storage`() {
         // Deck was built with 3, edited to need 5, state reverted to planned
         // 3 at deck + 2 in storage = 5, no missing
