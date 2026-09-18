@@ -126,7 +126,7 @@ fun CatalogueScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(uiState.cards, key = { it.id }) { card ->
-                        CatalogueGridCard(card = card, isBanned = card.identity.displayName.lowercase() in uiState.bannedCards, onClick = { onCardClick(card.id, false) })
+                        CatalogueGridCard(card = card, isBanned = card.identity.displayName.lowercase() in uiState.bannedCards, priceMarket = uiState.priceMarket, onClick = { onCardClick(card.id, false) })
                     }
                 }
             } else {
@@ -178,7 +178,7 @@ private fun EmptyState(
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun CatalogueGridCard(card: CatalogueCardSummary, isBanned: Boolean, onClick: () -> Unit) {
+private fun CatalogueGridCard(card: CatalogueCardSummary, isBanned: Boolean, priceMarket: com.riftcompanion.app.data.prefs.PriceMarket, onClick: () -> Unit) {
     ThemedCardSurface(
         modifier = Modifier.clickable(onClick = onClick),
         cornerRadius = 14,
@@ -216,9 +216,16 @@ private fun CatalogueGridCard(card: CatalogueCardSummary, isBanned: Boolean, onC
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            card.priceEur?.let {
+            card.priceEur?.takeIf { priceMarket == com.riftcompanion.app.data.prefs.PriceMarket.EUR || priceMarket == com.riftcompanion.app.data.prefs.PriceMarket.BOTH }?.let {
                 Text(
                     text = "€%.2f".format(it),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            card.priceUsd?.takeIf { priceMarket == com.riftcompanion.app.data.prefs.PriceMarket.USD || priceMarket == com.riftcompanion.app.data.prefs.PriceMarket.BOTH }?.let {
+                Text(
+                    text = "\$%.2f".format(it),
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

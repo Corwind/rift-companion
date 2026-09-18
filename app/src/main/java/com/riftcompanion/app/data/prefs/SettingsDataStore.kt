@@ -32,7 +32,7 @@ class SettingsDataStore @Inject constructor(
         val DATA_WARNING_ACK_KEY = booleanPreferencesKey("data_warning_acked")
         val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
         val LLM_PRIORITY_KEY = stringPreferencesKey("llm_priority")
-        val PRICE_CURRENCY_KEY = stringPreferencesKey("price_currency")
+        val PRICE_MARKET_KEY = stringPreferencesKey("price_currency")
     }
 
     val settingsFlow: Flow<SettingsData> = context.dataStore.data.map { prefs ->
@@ -46,7 +46,7 @@ class SettingsDataStore @Inject constructor(
             dataWarningAcked = prefs[DATA_WARNING_ACK_KEY] ?: false,
             geminiApiKey = prefs[GEMINI_API_KEY],
             llmPriority = prefs[LLM_PRIORITY_KEY]?.let { runCatching { LlmPriority.valueOf(it) }.getOrNull() } ?: LlmPriority.CloudFirst,
-            priceCurrency = prefs[PRICE_CURRENCY_KEY]?.let { runCatching { PriceCurrency.valueOf(it) }.getOrNull() } ?: PriceCurrency.EUR,
+            priceMarket = prefs[PRICE_MARKET_KEY]?.let { runCatching { PriceMarket.valueOf(it) }.getOrNull() } ?: PriceMarket.EUR,
         )
     }
 
@@ -93,8 +93,8 @@ class SettingsDataStore @Inject constructor(
         context.dataStore.edit { it[LLM_PRIORITY_KEY] = value.name }
     }
 
-    suspend fun setPriceCurrency(value: PriceCurrency) {
-        context.dataStore.edit { it[PRICE_CURRENCY_KEY] = value.name }
+    suspend fun setPriceMarket(value: PriceMarket) {
+        context.dataStore.edit { it[PRICE_MARKET_KEY] = value.name }
     }
 }
 
@@ -108,7 +108,7 @@ data class SettingsData(
     val dataWarningAcked: Boolean = false,
     val geminiApiKey: String? = null,
     val llmPriority: LlmPriority = LlmPriority.CloudFirst,
-    val priceCurrency: PriceCurrency = PriceCurrency.EUR,
+    val priceMarket: PriceMarket = PriceMarket.EUR,
 )
 
 enum class LlmPriority(val title: String, val description: String) {
@@ -116,7 +116,8 @@ enum class LlmPriority(val title: String, val description: String) {
     PrivacyFirst("Privacy first", "On-device AI → Cloud API"),
 }
 
-enum class PriceCurrency(val title: String, val symbol: String, val code: String) {
-    EUR("Euro", "€", "EUR"),
-    USD("US Dollar", "\$", "USD"),
+enum class PriceMarket(val title: String, val description: String, val symbol: String, val code: String) {
+    EUR("Cardmarket", "Show Cardmarket prices in euros", "€", "EUR"),
+    USD("TCGplayer", "Show TCGplayer prices in dollars", "\$", "USD"),
+    BOTH("Both", "Show both Cardmarket and TCGplayer", "", "BOTH"),
 }
