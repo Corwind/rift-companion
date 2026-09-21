@@ -30,11 +30,18 @@ class PiltoverArchiveClient @Inject constructor(
     }
 
     private fun authRequestBuilder(url: String): Request.Builder {
+        val cookies = credentialStore.loadPiltoverArchiveCookies()
         val token = credentialStore.loadPiltoverArchiveToken()
-            ?: throw Exception("No Piltover Archive token. Please log in.")
-        return Request.Builder()
-            .url(url)
-            .header("Authorization", "Bearer $token")
+        val builder = Request.Builder().url(url)
+        // Prefer cookie-based auth (Clerk session cookies are long-lived)
+        if (!cookies.isNullOrBlank()) {
+            builder.header("Cookie", cookies)
+        } else if (!token.isNullOrBlank()) {
+            builder.header("Authorization", "Bearer $token")
+        } else {
+            throw Exception("No Piltover Archive credentials. Please log in.")
+        }
+        return builder
     }
 
     fun isAvailable(): Boolean = credentialStore.hasValidPiltoverArchiveToken()
@@ -93,9 +100,15 @@ class PiltoverArchiveClient @Inject constructor(
             val limit = 500
             do {
                 val url = "$BASE_URL/cards?limit=$limit&page=$page"
+                android.util.Log.d("PiltoverSync", "fetchAllCards: fetching page $page")
                 val request = authRequestBuilder(url).build()
                 val response = okHttpClient.newCall(request).execute()
-                if (!response.isSuccessful) throw Exception("PA cards fetch failed: ${response.code}")
+                android.util.Log.d("PiltoverSync", "fetchAllCards: page $page response ${response.code}")
+                if (!response.isSuccessful) {
+                    val errorBody = response.body?.string()
+                    android.util.Log.d("PiltoverSync", "fetchAllCards: error body: ${errorBody?.take(200)}")
+                    throw Exception("PA cards fetch failed: ${response.code}")
+                }
                 val body = response.body!!.string()
                 response.close()
                 val parsed = json.decodeFromString(CardListResponse.serializer(), body)

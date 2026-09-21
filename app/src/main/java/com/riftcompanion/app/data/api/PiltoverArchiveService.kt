@@ -47,15 +47,22 @@ class PiltoverArchiveService @Inject constructor(
 
         // 1. Re-sync from CardNexus (source of truth)
         try {
+            android.util.Log.d("PiltoverSync", "Step 1: CardNexus sync...")
             repository.synchronize().getOrThrow()
+            android.util.Log.d("PiltoverSync", "Step 1: CardNexus sync done")
         } catch (e: Exception) {
+            android.util.Log.d("PiltoverSync", "Step 1 FAILED: ${e.message}")
             errors.add("CardNexus sync failed: ${e.message}")
         }
 
         // 2. Fetch all PA cards and build name → cardId map
+        android.util.Log.d("PiltoverSync", "Step 2: Fetching PA cards...")
         val paCardMap = try {
-            piltoverArchiveClient.fetchAllCards().getOrThrow()
+            val map = piltoverArchiveClient.fetchAllCards().getOrThrow()
+            android.util.Log.d("PiltoverSync", "Step 2: Got ${map.size} PA cards")
+            map
         } catch (e: Exception) {
+            android.util.Log.d("PiltoverSync", "Step 2 FAILED: ${e.message}")
             errors.add("PA card fetch failed: ${e.message}")
             return@withContext SyncResult(
                 inventorySynced = errors.none { it.startsWith("CardNexus") },
@@ -69,7 +76,7 @@ class PiltoverArchiveService @Inject constructor(
 
         // Build our nameSlug → displayName map for matching
         val identities = cardIdentityDao.getAllCards()
-        val displayNameToSlug = identities.associateBy { it.displayName }
+        android.util.Log.d("PiltoverSync", "Step 2b: ${identities.size} local card identities")
         val slugToPaCardId = mutableMapOf<String, String>()
         for (identity in identities) {
             val paCardId = paCardMap[identity.displayName]
@@ -77,6 +84,7 @@ class PiltoverArchiveService @Inject constructor(
                 slugToPaCardId[identity.nameSlug] = paCardId
             }
         }
+        android.util.Log.d("PiltoverSync", "Step 2c: mapped ${slugToPaCardId.size} slugs to PA card IDs")
 
         // 3. Push inventory as collection to Piltover Archive
         var collectionEntriesPushed = 0

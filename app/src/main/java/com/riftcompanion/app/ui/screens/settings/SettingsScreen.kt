@@ -164,6 +164,37 @@ fun SettingsScreen(
                 }
             }
 
+            SettingsCard("Piltover Archive", Icons.Default.CloudSync) {
+                if (uiState.isPiltoverSyncing) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Syncing…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            if (uiState.hasPiltoverArchiveToken) {
+                                viewModel.syncPiltoverArchive()
+                            } else {
+                                onPiltoverArchiveLogin()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Sync with Piltover Archive")
+                    }
+                }
+                uiState.piltoverSyncMessage?.let {
+                    Spacer(Modifier.height(4.dp))
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                uiState.piltoverSyncError?.let {
+                    Spacer(Modifier.height(4.dp))
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
+            }
+
             // Synchronization
             SettingsCard("Synchronization", Icons.Default.Sync) {
                 if (uiState.isSyncing) {
@@ -283,37 +314,6 @@ fun SettingsScreen(
                             )
                         }
                     }
-                }
-            }
-
-            SettingsCard("Piltover Archive", Icons.Default.CloudSync) {
-                if (uiState.isPiltoverSyncing) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Syncing…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else {
-                    Button(
-                        onClick = {
-                            if (uiState.hasPiltoverArchiveToken) {
-                                viewModel.syncPiltoverArchive()
-                            } else {
-                                onPiltoverArchiveLogin()
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("Sync with Piltover Archive")
-                    }
-                }
-                uiState.piltoverSyncMessage?.let {
-                    Spacer(Modifier.height(4.dp))
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                uiState.piltoverSyncError?.let {
-                    Spacer(Modifier.height(4.dp))
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
             }
 

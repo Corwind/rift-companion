@@ -361,8 +361,8 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                     composable("paLogin") {
                         PiltoverArchiveLoginScreen(
                             onBack = { navController.popBackStack() },
-                            onTokenCaptured = { token, expiresAt ->
-                                settingsViewModel.savePiltoverArchiveToken(token, expiresAt)
+                            onCookiesCaptured = { cookies ->
+                                settingsViewModel.savePiltoverArchiveCookies(cookies)
                                 navController.popBackStack()
                                 // Auto-sync after login
                                 settingsViewModel.syncPiltoverArchive()

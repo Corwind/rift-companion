@@ -38,18 +38,19 @@ import androidx.compose.ui.viewinterop.AndroidView
  * Captive WebView login for Piltover Archive.
  *
  * Loads the Clerk Account Portal sign-in page. After successful login,
- * Clerk redirects to piltoverarchive.com where we poll for the session
- * token via the Clerk JS SDK (window.Clerk.session.getToken()).
+ * Clerk redirects to piltoverarchive.com where we extract ALL session
+ * cookies (which are long-lived, unlike the 60-second JWT tokens).
+ * The cookies are stored and sent with every PA API request.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun PiltoverArchiveLoginScreen(
     onBack: () -> Unit,
-    onTokenCaptured: (token: String, expiresAt: Long) -> Unit,
+    onCookiesCaptured: (cookies: String) -> Unit,
 ) {
     var isLoading by remember { mutableStateOf(true) }
     var statusText by remember { mutableStateOf("Loading sign-in page…") }
-    var tokenFound by remember { mutableStateOf(false) }
+    var done by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -73,7 +74,7 @@ fun PiltoverArchiveLoginScreen(
             )
         }
 
-        if (isLoading && !tokenFound) {
+        if (isLoading && !done) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator()
@@ -87,21 +88,9 @@ fun PiltoverArchiveLoginScreen(
             factory = { ctx ->
                 val activity = ctx as? Activity
 
-                val tokenReceiver = object {
-                    @JavascriptInterface
-                    fun onToken(token: String?) {
-                        if (token != null && token.isNotEmpty() && !tokenFound) {
-                            tokenFound = true
-                            val expiresAt = extractJwtExpiry(token)
-                            activity?.runOnUiThread { onTokenCaptured(token, expiresAt) }
-                        }
-                    }
-                }
-
                 WebView(ctx).apply {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
-                    addJavascriptInterface(tokenReceiver, "AndroidToken")
 
                     webChromeClient = WebChromeClient()
                     webViewClient = object : WebViewClient() {
@@ -111,63 +100,40 @@ fun PiltoverArchiveLoginScreen(
 
                         override fun onPageFinished(view: WebView?, url: String?) {
                             isLoading = false
-                            if (url == null || tokenFound) return
+                            if (url == null || done) return
 
-                            // If we're on the main site (redirected after login), try to get the token
                             if (isPostLoginUrl(url)) {
-                                statusText = "Detecting session…"
-                                pollForToken(view)
+                                statusText = "Capturing session…"
+                                // Wait a moment for cookies to settle, then grab them
+                                val handler = android.os.Handler(android.os.Looper.getMainLooper())
+                                var attempts = 0
+                                val maxAttempts = 10
+                                val checkRunnable = object : Runnable {
+                                    override fun run() {
+                                        if (done || attempts >= maxAttempts) return
+                                        attempts++
+                                        val cm = CookieManager.getInstance()
+                                        // Gather cookies from both domains
+                                        val mainCookies = cm.getCookie("https://piltoverarchive.com") ?: ""
+                                        val clerkCookies = cm.getCookie("https://clerk.piltoverarchive.com") ?: ""
+                                        val allCookies = listOf(mainCookies, clerkCookies)
+                                            .filter { it.isNotBlank() }
+                                            .joinToString("; ")
+                                        // Check if we have a session cookie
+                                        if (allCookies.contains("__session") || allCookies.contains("__clerk_db_jwt")) {
+                                            done = true
+                                            activity?.runOnUiThread { onCookiesCaptured(allCookies) }
+                                        } else {
+                                            handler.postDelayed(this, 500)
+                                        }
+                                    }
+                                }
+                                handler.postDelayed(checkRunnable, 500)
                             }
                         }
 
                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                             return false
-                        }
-
-                        private fun pollForToken(view: WebView?) {
-                            // Poll up to 20 times (every 500ms = 10s total) for the Clerk SDK to be ready
-                            var attempts = 0
-                            val maxAttempts = 20
-                            val handler = android.os.Handler(android.os.Looper.getMainLooper())
-                            val pollRunnable = object : Runnable {
-                                override fun run() {
-                                    if (tokenFound || attempts >= maxAttempts) return
-                                    attempts++
-                                    statusText = "Detecting session… ($attempts)"
-
-                                    view?.evaluateJavascript("""
-                                        (function() {
-                                            try {
-                                                if (window.Clerk && window.Clerk.session) {
-                                                    window.Clerk.session.getToken().then(function(t) {
-                                                        AndroidToken.onToken(t);
-                                                    }).catch(function() {
-                                                        AndroidToken.onToken(null);
-                                                    });
-                                                } else if (window.Clerk && window.Clerk.loaded) {
-                                                    // Clerk loaded but no session — not logged in
-                                                    AndroidToken.onToken(null);
-                                                }
-                                            } catch(e) {
-                                                AndroidToken.onToken(null);
-                                            }
-                                        })();
-                                    """.trimIndent(), null)
-
-                                    // Also try cookies as fallback
-                                    val cookies = CookieManager.getInstance().getCookie(url)
-                                    val cookieToken = extractClerkTokenFromCookieString(cookies)
-                                    if (cookieToken != null && !tokenFound) {
-                                        tokenFound = true
-                                        val expiresAt = extractJwtExpiry(cookieToken)
-                                        activity?.runOnUiThread { onTokenCaptured(cookieToken, expiresAt) }
-                                        return
-                                    }
-
-                                    handler.postDelayed(this, 500)
-                                }
-                            }
-                            handler.post(pollRunnable)
                         }
                     }
                     CookieManager.getInstance().setAcceptCookie(true)
@@ -186,40 +152,4 @@ private fun isPostLoginUrl(url: String): Boolean {
            !lower.contains("clerk.piltoverarchive.com") &&
            !lower.contains("/sign-in") &&
            !lower.contains("/sign-up")
-}
-
-private fun extractClerkTokenFromCookieString(cookies: String?): String? {
-    if (cookies.isNullOrBlank()) return null
-    for (part in cookies.split(";")) {
-        val trimmed = part.trim()
-        if (trimmed.startsWith("__session=")) {
-            val value = trimmed.substringAfter("=")
-            if (value.isNotEmpty()) return value
-        }
-        if (trimmed.startsWith("__clerk_db_jwt=")) {
-            val value = trimmed.substringAfter("=")
-            if (value.isNotEmpty()) return value
-        }
-    }
-    return null
-}
-
-private fun extractJwtExpiry(token: String): Long {
-    try {
-        val parts = token.split(".")
-        if (parts.size < 2) return System.currentTimeMillis() + 3600_000
-        val payload = parts[1]
-        val decoded = android.util.Base64.decode(
-            payload.padEnd(payload.length + (4 - payload.length % 4) % 4, '='),
-            android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP,
-        ).toString(Charsets.UTF_8)
-        val expRegex = """"exp"\s*:\s*(\d+)""".toRegex()
-        val match = expRegex.find(decoded)
-        if (match != null) {
-            val expSeconds = match.groupValues[1].toLong()
-            return (expSeconds * 1000) - 300_000
-        }
-    } catch (_: Exception) {
-    }
-    return System.currentTimeMillis() + 3600_000
 }

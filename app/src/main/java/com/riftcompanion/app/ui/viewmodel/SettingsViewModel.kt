@@ -123,12 +123,20 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun savePiltoverArchiveToken(token: String, expiresAt: Long) {
+        android.util.Log.d("PiltoverSync", "savePiltoverArchiveToken: token=${token.take(20)}... expiresAt=$expiresAt")
         credentialStore.savePiltoverArchiveToken(token, expiresAt)
         _uiState.value = _uiState.value.copy(hasPiltoverArchiveToken = true)
     }
 
+    fun savePiltoverArchiveCookies(cookies: String) {
+        credentialStore.savePiltoverArchiveCookies(cookies)
+        _uiState.value = _uiState.value.copy(hasPiltoverArchiveToken = true)
+    }
+
     fun syncPiltoverArchive() {
+        android.util.Log.d("PiltoverSync", "syncPiltoverArchive called, hasToken=${credentialStore.hasValidPiltoverArchiveToken()}")
         if (!credentialStore.hasValidPiltoverArchiveToken()) {
+            android.util.Log.d("PiltoverSync", "No valid token — cannot sync")
             _uiState.value = _uiState.value.copy(
                 piltoverSyncError = "Not logged in to Piltover Archive. Please log in first.",
             )
@@ -140,7 +148,9 @@ class SettingsViewModel @Inject constructor(
                 piltoverSyncMessage = null,
                 piltoverSyncError = null,
             )
+            android.util.Log.d("PiltoverSync", "Starting sync...")
             val result = piltoverArchiveService.sync()
+            android.util.Log.d("PiltoverSync", "Sync done: mapped=${result.cardsMapped} pushed=${result.collectionEntriesPushed} decks=${result.decksPushed} pulled=${result.decksPulled} errors=${result.errors}")
             _uiState.value = _uiState.value.copy(
                 isPiltoverSyncing = false,
                 piltoverSyncMessage = "Synced: ${result.cardsMapped} cards mapped, ${result.collectionEntriesPushed} collection entries, ${result.decksPushed} decks pushed, ${result.decksPulled} decks pulled.",
