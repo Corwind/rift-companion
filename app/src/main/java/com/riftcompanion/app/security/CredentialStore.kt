@@ -45,4 +45,48 @@ class CredentialStore private constructor(
     }
 
     fun hasApiKey(): Boolean = !prefs.getString(KEY_API_KEY, null).isNullOrBlank()
+
+    // ── Piltover Archive credentials ───────────────────────────────
+
+    private val KEY_PA_TOKEN = "piltover_archive_token"
+    private val KEY_PA_TOKEN_EXPIRY = "piltover_archive_token_expiry"
+    private val KEY_PA_COOKIES = "piltover_archive_cookies"
+
+    fun loadPiltoverArchiveToken(): String? = prefs.getString(KEY_PA_TOKEN, null)
+
+    fun loadPiltoverArchiveTokenExpiry(): Long = prefs.getLong(KEY_PA_TOKEN_EXPIRY, 0L)
+
+    fun savePiltoverArchiveToken(token: String, expiresAt: Long) {
+        prefs.edit()
+            .putString(KEY_PA_TOKEN, token)
+            .putLong(KEY_PA_TOKEN_EXPIRY, expiresAt)
+            .commit()
+    }
+
+    fun savePiltoverArchiveCookies(cookies: String) {
+        prefs.edit().putString(KEY_PA_COOKIES, cookies).commit()
+    }
+
+    fun loadPiltoverArchiveCookies(): String? = prefs.getString(KEY_PA_COOKIES, null)
+
+    fun deletePiltoverArchiveToken() {
+        prefs.edit()
+            .remove(KEY_PA_TOKEN)
+            .remove(KEY_PA_TOKEN_EXPIRY)
+            .apply()
+    }
+
+    fun deletePiltoverArchiveCookies() {
+        prefs.edit().remove(KEY_PA_COOKIES).commit()
+    }
+
+    fun hasValidPiltoverArchiveToken(): Boolean {
+        // Check for cookies (preferred auth method — Clerk JWTs are too short-lived)
+        val cookies = prefs.getString(KEY_PA_COOKIES, null)
+        if (!cookies.isNullOrBlank()) return true
+        // Fall back to JWT token
+        val token = prefs.getString(KEY_PA_TOKEN, null)
+        val expiry = prefs.getLong(KEY_PA_TOKEN_EXPIRY, 0L)
+        return !token.isNullOrBlank() && expiry > System.currentTimeMillis()
+    }
 }

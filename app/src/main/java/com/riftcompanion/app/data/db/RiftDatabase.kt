@@ -15,7 +15,7 @@ import androidx.room.RoomDatabase
         DeckEntryEntity::class,
         CardPriceEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 abstract class RiftDatabase : RoomDatabase() {
