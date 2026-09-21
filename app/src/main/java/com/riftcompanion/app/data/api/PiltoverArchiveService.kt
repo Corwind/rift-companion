@@ -114,7 +114,8 @@ class PiltoverArchiveService @Inject constructor(
             errors.add("Collection push failed: ${e.message}")
         }
 
-        // 4. Push deck definitions to Piltover Archive
+        // 4. Push deck definitions to Piltover Archive (create or update)
+        // Only push decks that exist in the app — do NOT pull public decks from PA
         var decksPushed = 0
         try {
             val decks = deckDao.getAllDecks().first()
@@ -133,66 +134,12 @@ class PiltoverArchiveService @Inject constructor(
             errors.add("Deck push failed: ${e.message}")
         }
 
-        // 5. Pull decks from Piltover Archive that don't exist in the app
-        var decksPulled = 0
-        try {
-            val paDecks = piltoverArchiveClient.getDecks(limit = 100).getOrNull() ?: emptyList()
-            val localDecks = deckDao.getAllDecks().first()
-            val knownPaIds = localDecks.mapNotNull { it.piltoverArchiveId }.toSet()
-
-            for (paDeck in paDecks) {
-                if (paDeck.id in knownPaIds) continue
-
-                // Fetch full deck detail to get card entries
-                val detail = piltoverArchiveClient.getDeck(paDeck.id).getOrNull() ?: continue
-
-                // Create deck in app
-                val deckId = java.util.UUID.randomUUID().toString()
-                val now = System.currentTimeMillis()
-                deckDao.insertDeck(DeckEntity(
-                    id = deckId,
-                    name = detail.name,
-                    state = "planned",
-                    rulesetId = "riftbound",
-                    createdAt = now,
-                    updatedAt = now,
-                    piltoverArchiveId = detail.id,
-                ))
-
-                // Create entries (map PA card IDs back to name slugs)
-                val paIdToSlug = slugToPaCardId.entries.associate { (slug, id) -> id to slug }
-                val entries = mutableListOf<DeckEntryEntity>()
-                fun addEntries(zone: DeckZone, cards: List<PiltoverArchiveClient.PaDeckCardEntry>) {
-                    for (card in cards) {
-                        val nameSlug = paIdToSlug[card.cardId] ?: continue
-                        entries.add(DeckEntryEntity(
-                            deckId = deckId,
-                            zone = zone.name,
-                            nameSlug = nameSlug,
-                            quantity = card.quantity ?: 1,
-                        ))
-                    }
-                }
-                detail.champions.let { addEntries(DeckZone.chosenChampion, it) }
-                detail.battlefields.let { addEntries(DeckZone.battlefield, it) }
-                detail.runes.let { addEntries(DeckZone.rune, it) }
-                detail.maindeck.let { addEntries(DeckZone.main, it) }
-                detail.sideboard.let { addEntries(DeckZone.sideboard, it) }
-                if (entries.isNotEmpty()) {
-                    deckDao.insertEntries(entries)
-                }
-                decksPulled++
-            }
-        } catch (e: Exception) {
-            errors.add("Deck pull failed: ${e.message}")
-        }
-
         SyncResult(
             inventorySynced = errors.none { it.startsWith("CardNexus") },
             cardsMapped = slugToPaCardId.size,
             collectionEntriesPushed = collectionEntriesPushed,
             decksPushed = decksPushed,
-            decksPulled = decksPulled,
+            decksPulled = 0,
             errors = errors,
         )
     }
