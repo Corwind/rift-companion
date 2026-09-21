@@ -45,4 +45,33 @@ class CredentialStore private constructor(
     }
 
     fun hasApiKey(): Boolean = !prefs.getString(KEY_API_KEY, null).isNullOrBlank()
+
+    // ── Piltover Archive credentials ───────────────────────────────
+
+    private val KEY_PA_TOKEN = "piltover_archive_token"
+    private val KEY_PA_TOKEN_EXPIRY = "piltover_archive_token_expiry"
+
+    fun loadPiltoverArchiveToken(): String? = prefs.getString(KEY_PA_TOKEN, null)
+
+    fun loadPiltoverArchiveTokenExpiry(): Long = prefs.getLong(KEY_PA_TOKEN_EXPIRY, 0L)
+
+    fun savePiltoverArchiveToken(token: String, expiresAt: Long) {
+        prefs.edit()
+            .putString(KEY_PA_TOKEN, token)
+            .putLong(KEY_PA_TOKEN_EXPIRY, expiresAt)
+            .apply()
+    }
+
+    fun deletePiltoverArchiveToken() {
+        prefs.edit()
+            .remove(KEY_PA_TOKEN)
+            .remove(KEY_PA_TOKEN_EXPIRY)
+            .apply()
+    }
+
+    fun hasValidPiltoverArchiveToken(): Boolean {
+        val token = prefs.getString(KEY_PA_TOKEN, null)
+        val expiry = prefs.getLong(KEY_PA_TOKEN_EXPIRY, 0L)
+        return !token.isNullOrBlank() && expiry > System.currentTimeMillis()
+    }
 }
