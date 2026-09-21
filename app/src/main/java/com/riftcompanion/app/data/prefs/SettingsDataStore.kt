@@ -32,6 +32,7 @@ class SettingsDataStore @Inject constructor(
         val DATA_WARNING_ACK_KEY = booleanPreferencesKey("data_warning_acked")
         val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
         val PRICE_MARKET_KEY = stringPreferencesKey("price_currency")
+        val SYNC_TO_PA_KEY = booleanPreferencesKey("sync_to_piltover_archive")
     }
 
     val settingsFlow: Flow<SettingsData> = context.dataStore.data.map { prefs ->
@@ -45,6 +46,7 @@ class SettingsDataStore @Inject constructor(
             dataWarningAcked = prefs[DATA_WARNING_ACK_KEY] ?: false,
             geminiApiKey = prefs[GEMINI_API_KEY],
             priceMarket = prefs[PRICE_MARKET_KEY]?.let { runCatching { PriceMarket.valueOf(it) }.getOrNull() } ?: PriceMarket.EUR,
+            syncToPiltoverArchive = prefs[SYNC_TO_PA_KEY] ?: false,
         )
     }
 
@@ -90,6 +92,10 @@ class SettingsDataStore @Inject constructor(
     suspend fun setPriceMarket(value: PriceMarket) {
         context.dataStore.edit { it[PRICE_MARKET_KEY] = value.name }
     }
+
+    suspend fun setSyncToPiltoverArchive(value: Boolean) {
+        context.dataStore.edit { it[SYNC_TO_PA_KEY] = value }
+    }
 }
 
 data class SettingsData(
@@ -102,6 +108,7 @@ data class SettingsData(
     val dataWarningAcked: Boolean = false,
     val geminiApiKey: String? = null,
     val priceMarket: PriceMarket = PriceMarket.EUR,
+    val syncToPiltoverArchive: Boolean = false,
 )
 
 enum class PriceMarket(val title: String, val description: String, val symbol: String, val code: String) {
