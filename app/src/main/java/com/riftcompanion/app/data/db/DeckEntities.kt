@@ -12,6 +12,7 @@ data class DeckEntity(
     val createdAt: Long,
     val updatedAt: Long,
     val linkedLocationName: String? = null,
+    val piltoverArchiveId: String? = null,
 )
 
 @Entity(tableName = "deck_entries")
