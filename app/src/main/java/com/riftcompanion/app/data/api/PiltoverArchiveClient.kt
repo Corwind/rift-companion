@@ -97,7 +97,7 @@ class PiltoverArchiveClient @Inject constructor(
         runCatching {
             val result = mutableMapOf<String, String>()
             var page = 1
-            val limit = 500
+            val limit = 100
             do {
                 val url = "$BASE_URL/cards?limit=$limit&page=$page"
                 android.util.Log.d("PiltoverSync", "fetchAllCards: fetching page $page")
