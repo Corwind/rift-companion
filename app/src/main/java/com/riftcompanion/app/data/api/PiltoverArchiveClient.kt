@@ -199,11 +199,10 @@ class PiltoverArchiveClient @Inject constructor(
         val hasPrevious: Boolean = false,
     )
 
-    /** Fetch all card variants. Returns a map of card name → Pair(cardId, variantId), and a map of variantNumber → variantId. */
-    suspend fun fetchAllCards(): Result<Pair<Map<String, Pair<String, String>>, Map<String, String>>> = withContext(Dispatchers.IO) {
+    /** Fetch all card variants. Returns a map of variantNumber → Pair(cardId, variantId). */
+    suspend fun fetchAllCards(): Result<Map<String, Pair<String, String>>> = withContext(Dispatchers.IO) {
         runCatching {
             val result = mutableMapOf<String, Pair<String, String>>()
-            val variantNumberMap = mutableMapOf<String, String>()
             var page = 1
             val limit = 100
             do {
@@ -224,18 +223,14 @@ class PiltoverArchiveClient @Inject constructor(
                     val cardName = variant.card?.name ?: continue
                     val cardId = variant.card.id
                     val variantId = variant.id
-                    // Keep first variant per name
-                    if (cardName !in result) {
-                        result[cardName] = cardId to variantId
-                    }
-                    // Also map variantNumber → variantId for collection matching
-                    if (!variant.variantNumber.isNullOrBlank()) {
-                        variantNumberMap[variant.variantNumber] = variantId
+                    val variantNumber = variant.variantNumber
+                    if (!variantNumber.isNullOrBlank()) {
+                        result[variantNumber] = cardId to variantId
                     }
                 }
                 page++
             } while (parsed.pagination?.hasNext == true)
-            result to variantNumberMap
+            result
         }
     }
 

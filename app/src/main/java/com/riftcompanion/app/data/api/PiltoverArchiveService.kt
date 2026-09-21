@@ -54,12 +54,12 @@ class PiltoverArchiveService @Inject constructor(
             // Don't add to errors — we can still sync local data to PA
         }
 
-        // 2. Fetch all PA cards and build name → (cardId, variantId) map + variantNumber → variantId map
+        // 2. Fetch all PA cards and build variantNumber → (cardId, variantId) map
         android.util.Log.d("PiltoverSync", "Step 2: Fetching PA cards...")
-        val (paCardMap, variantNumberToId) = try {
-            val result = piltoverArchiveClient.fetchAllCards().getOrThrow()
-            android.util.Log.d("PiltoverSync", "Step 2: Got ${result.first.size} PA cards, ${result.second.size} variant numbers")
-            result
+        val paVariantMap = try {
+            val map = piltoverArchiveClient.fetchAllCards().getOrThrow()
+            android.util.Log.d("PiltoverSync", "Step 2: Got ${map.size} PA card variants")
+            map
         } catch (e: Exception) {
             android.util.Log.d("PiltoverSync", "Step 2 FAILED: ${e.message}")
             errors.add("PA card fetch failed: ${e.message}")
@@ -72,25 +72,53 @@ class PiltoverArchiveService @Inject constructor(
             )
         }
 
-        // Build our nameSlug → (cardId, variantId) map
-        val identities = cardIdentityDao.getAllCards()
-        android.util.Log.d("PiltoverSync", "Step 2b: ${identities.size} local card identities")
-        val slugToPaIds = mutableMapOf<String, Pair<String, String>>()
-        val unmatchedNames = mutableListOf<String>()
-        for (identity in identities) {
-            // Try exact match first, then try with " - " → ", " substitution (CN uses "Name - Subtitle", PA uses "Name, Subtitle")
-            val paIds = paCardMap[identity.displayName]
-                ?: paCardMap[identity.displayName.replace(" - ", ", ")]
-                ?: paCardMap[identity.displayName.replace(", ", " - ")]
-            if (paIds != null) {
-                slugToPaIds[identity.nameSlug] = paIds
-            } else {
-                unmatchedNames.add(identity.displayName)
+        // Build productId → (cardId, variantId) map using variantNumber matching
+        // Each printing has a specific expansionSlug + printNumber → exact PA variantNumber
+        val printings = cardPrintingDao.getAll().first()
+        android.util.Log.d("PiltoverSync", "Step 2b: ${printings.size} local printings")
+        // Map expansionSlug → PA set prefix
+        val expansionToPrefix = mapOf(
+            "arcane-box-set" to "ARC",
+            "origins-main-set" to "OGN",
+            "origins-promo-cards" to "OGN",
+            "origins-proving-grounds" to "OGS",
+            "radiance" to "RAD",
+            "spiritforged" to "SFD",
+            "spiritforged-promo-cards" to "SFD",
+            "unleashed" to "UNL",
+            "unleashed-promo-cards" to "UNL",
+            "vendetta" to "VEN",
+            "vendetta-promo-cards" to "VEN",
+            "riftbound-promos" to "WRLD25",
+        )
+        // Case-insensitive PA variant lookup
+        val paVariantByLower = paVariantMap.mapKeys { (k, _) -> k.lowercase() }
+        
+        // Map productId → (cardId, variantId) for exact printing match
+        val productToPaIds = mutableMapOf<Long, Pair<String, String>>()
+        var unmatchedCount = 0
+        for (printing in printings) {
+            val prefix = expansionToPrefix[printing.expansionSlug]
+            val printNumber = printing.printNumber
+            if (prefix != null && !printNumber.isNullOrBlank()) {
+                val variantNumber = "$prefix-$printNumber"
+                val paIds = paVariantByLower[variantNumber.lowercase()]
+                if (paIds != null) {
+                    productToPaIds[printing.productID] = paIds
+                } else {
+                    unmatchedCount++
+                }
             }
         }
-        android.util.Log.d("PiltoverSync", "Step 2c: mapped ${slugToPaIds.size} slugs to PA card IDs, ${unmatchedNames.size} unmatched")
-        if (unmatchedNames.isNotEmpty()) {
-            android.util.Log.d("PiltoverSync", "Step 2c: first 20 unmatched: ${unmatchedNames.take(20).joinToString(" | ")}")
+        android.util.Log.d("PiltoverSync", "Step 2c: mapped ${productToPaIds.size} productIds to PA card IDs, $unmatchedCount unmatched")
+        
+        // Also build nameSlug → (cardId, variantId) for deck sync (use first matched printing per slug)
+        val slugToPaIds = mutableMapOf<String, Pair<String, String>>()
+        for (printing in printings) {
+            val paIds = productToPaIds[printing.productID]
+            if (paIds != null && printing.nameSlug !in slugToPaIds) {
+                slugToPaIds[printing.nameSlug] = paIds
+            }
         }
 
         // 3. Sync collection: read local inventory → export PA → PATCH/POST/DELETE
@@ -100,8 +128,6 @@ class PiltoverArchiveService @Inject constructor(
             android.util.Log.d("PiltoverSync", "Step 3: Reading local inventory...")
             val lines = inventoryLineDao.getAll().first()
             android.util.Log.d("PiltoverSync", "Step 3: Got ${lines.size} local inventory lines")
-            val printings = cardPrintingDao.getAll().first()
-            val printingByProduct = printings.associateBy { it.productID }
 
             // Export existing PA collection
             val paCollectionResult = piltoverArchiveClient.getCollection()
@@ -113,12 +139,11 @@ class PiltoverArchiveService @Inject constructor(
             val paVariantIds = paCollection.mapNotNull { it.variantId }.toSet()
             android.util.Log.d("PiltoverSync", "Step 3: ${paCollection.size} existing PA collection entries")
 
-            // Build CN variantId → quantity map
+            // Build CN variantId → quantity map (using exact productId → variantId mapping)
             val cnQuantitiesByVariantId = mutableMapOf<String, Int>()
             for (line in lines) {
                 if (line.quantity <= 0) continue
-                val printing = printingByProduct[line.productId] ?: continue
-                val paIds = slugToPaIds[printing.nameSlug] ?: continue
+                val paIds = productToPaIds[line.productId] ?: continue
                 cnQuantitiesByVariantId[paIds.second] = (cnQuantitiesByVariantId[paIds.second] ?: 0) + line.quantity
             }
             android.util.Log.d("PiltoverSync", "Step 3: ${cnQuantitiesByVariantId.size} unique cards to sync")
