@@ -364,6 +364,8 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                             onTokenCaptured = { token, expiresAt ->
                                 settingsViewModel.savePiltoverArchiveToken(token, expiresAt)
                                 navController.popBackStack()
+                                // Auto-sync after login
+                                settingsViewModel.syncPiltoverArchive()
                             },
                         )
                     }

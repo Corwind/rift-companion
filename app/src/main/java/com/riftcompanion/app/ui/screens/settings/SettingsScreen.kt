@@ -287,36 +287,33 @@ fun SettingsScreen(
             }
 
             SettingsCard("Piltover Archive", Icons.Default.CloudSync) {
-                if (uiState.hasPiltoverArchiveToken) {
-                    Text("Logged in", style = MaterialTheme.typography.bodyMedium, color = com.riftcompanion.app.ui.theme.freeColor())
-                    Spacer(Modifier.height(8.dp))
-                    if (uiState.isPiltoverSyncing) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Syncing…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    } else {
-                        Button(onClick = { viewModel.syncPiltoverArchive() }, modifier = Modifier.fillMaxWidth()) {
-                            Text("Sync to Piltover Archive")
-                        }
-                    }
-                    uiState.piltoverSyncMessage?.let {
-                        Spacer(Modifier.height(4.dp))
-                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    uiState.piltoverSyncError?.let {
-                        Spacer(Modifier.height(4.dp))
-                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                if (uiState.isPiltoverSyncing) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Syncing…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 } else {
-                    Text("Not logged in", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(8.dp))
-                    Text("Log in to Piltover Archive to sync your inventory and decks.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(8.dp))
-                    Button(onClick = onPiltoverArchiveLogin, modifier = Modifier.fillMaxWidth()) {
-                        Text("Log in to Piltover Archive")
+                    Button(
+                        onClick = {
+                            if (uiState.hasPiltoverArchiveToken) {
+                                viewModel.syncPiltoverArchive()
+                            } else {
+                                onPiltoverArchiveLogin()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Sync with Piltover Archive")
                     }
+                }
+                uiState.piltoverSyncMessage?.let {
+                    Spacer(Modifier.height(4.dp))
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                uiState.piltoverSyncError?.let {
+                    Spacer(Modifier.height(4.dp))
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
             }
 
