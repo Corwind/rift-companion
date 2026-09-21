@@ -121,7 +121,7 @@ fun PiltoverArchiveLoginScreen(
                             return false
                         }
                     }
-                    loadUrl("https://piltoverarchive.com/sign-in")
+                    loadUrl("https://accounts.piltoverarchive.com/sign-in")
                     webViewRef = this
                 }
             },
@@ -131,13 +131,13 @@ fun PiltoverArchiveLoginScreen(
 }
 
 private fun isPostLoginUrl(url: String): Boolean {
-    // After login, Clerk redirects to the app home or dashboard
-    // Check if we're no longer on a sign-in URL
+    // After login, Clerk redirects from accounts.piltoverarchive.com to piltoverarchive.com
+    // We detect success when we land on the main site (not the accounts subdomain)
     val lower = url.lowercase()
-    return !lower.contains("/sign-in") &&
-           !lower.contains("/sign-up") &&
-           !lower.contains("/login") &&
-           (lower.contains("piltoverarchive.com") || lower.contains("clerk"))
+    return lower.contains("piltoverarchive.com") &&
+           !lower.contains("accounts.piltoverarchive.com") &&
+           !lower.contains("/sign-in") &&
+           !lower.contains("/sign-up")
 }
 
 private fun extractClerkToken(cookies: String?): String? {

@@ -5,12 +5,10 @@ import com.riftcompanion.app.data.db.CardPrintingDao
 import com.riftcompanion.app.data.db.DeckDao
 import com.riftcompanion.app.data.db.DeckEntryEntity
 import com.riftcompanion.app.data.db.DeckEntity
-import com.riftcompanion.app.data.db.EntityConverter
-import com.riftcompanion.app.data.db.InventoryLineDao
 import com.riftcompanion.app.data.repository.RiftRepository
 import com.riftcompanion.app.domain.model.DeckZone
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,7 +18,7 @@ import javax.inject.Singleton
  *
  * Flow:
  * 1. Read from CardNexus (re-sync inventory + locations)
- * 2. Map CardNexus card name slugs → Piltover Archive card UUIDs
+ * 2. Fetch all PA cards, build cardName → cardId map
  * 3. Push inventory as collection to Piltover Archive
  * 4. Push deck definitions to Piltover Archive (create or update)
  * 5. Pull decks from Piltover Archive that don't exist in the app → create them locally
@@ -33,7 +31,6 @@ class PiltoverArchiveService @Inject constructor(
     private val cardNexusClient: CardNexusClient,
     private val cardIdentityDao: CardIdentityDao,
     private val cardPrintingDao: CardPrintingDao,
-    private val inventoryLineDao: InventoryLineDao,
     private val deckDao: DeckDao,
 ) {
     data class SyncResult(
@@ -55,20 +52,29 @@ class PiltoverArchiveService @Inject constructor(
             errors.add("CardNexus sync failed: ${e.message}")
         }
 
-        // 2. Build card name slug → Piltover Archive card UUID map
+        // 2. Fetch all PA cards and build name → cardId map
+        val paCardMap = try {
+            piltoverArchiveClient.fetchAllCards().getOrThrow()
+        } catch (e: Exception) {
+            errors.add("PA card fetch failed: ${e.message}")
+            return@withContext SyncResult(
+                inventorySynced = errors.none { it.startsWith("CardNexus") },
+                cardsMapped = 0,
+                collectionEntriesPushed = 0,
+                decksPushed = 0,
+                decksPulled = 0,
+                errors = errors,
+            )
+        }
+
+        // Build our nameSlug → displayName map for matching
         val identities = cardIdentityDao.getAllCards()
-        val slugToPaId = mutableMapOf<String, String>()
-        var cardsMapped = 0
+        val displayNameToSlug = identities.associateBy { it.displayName }
+        val slugToPaCardId = mutableMapOf<String, String>()
         for (identity in identities) {
-            try {
-                val results = piltoverArchiveClient.searchCards(identity.displayName, limit = 1).getOrNull()
-                val match = results?.firstOrNull { it.name.equals(identity.displayName, ignoreCase = true) }
-                if (match != null) {
-                    slugToPaId[identity.nameSlug] = match.id
-                    cardsMapped++
-                }
-            } catch (e: Exception) {
-                // Skip individual card mapping errors
+            val paCardId = paCardMap[identity.displayName]
+            if (paCardId != null) {
+                slugToPaCardId[identity.nameSlug] = paCardId
             }
         }
 
@@ -83,7 +89,7 @@ class PiltoverArchiveService @Inject constructor(
             for (line in lines) {
                 if (line.quantity <= 0) continue
                 val printing = printingByProduct[line.productId] ?: continue
-                val paCardId = slugToPaId[printing.nameSlug] ?: continue
+                val paCardId = slugToPaCardId[printing.nameSlug] ?: continue
                 collectionUpdates.add(PiltoverArchiveClient.CollectionUpdate(
                     cardId = paCardId,
                     variantId = null,
@@ -106,14 +112,12 @@ class PiltoverArchiveService @Inject constructor(
             val decks = deckDao.getAllDecks().first()
             for (deck in decks) {
                 val entries = deckDao.getEntriesForDeck(deck.id)
-                val paDeck = buildPaDeck(deck.name, entries, slugToPaId)
+                val paDeck = buildPaDeck(deck.name, entries, slugToPaCardId)
                 if (deck.piltoverArchiveId != null) {
-                    // Update existing deck
                     piltoverArchiveClient.updateDeck(deck.piltoverArchiveId, paDeck).getOrThrow()
                 } else {
-                    // Create new deck and link
                     val created = piltoverArchiveClient.createDeck(paDeck).getOrThrow()
-                    deckDao.insertDeck(deck.copy(piltoverArchiveId = created.uuid))
+                    deckDao.insertDeck(deck.copy(piltoverArchiveId = created.id))
                 }
                 decksPushed++
             }
@@ -129,10 +133,10 @@ class PiltoverArchiveService @Inject constructor(
             val knownPaIds = localDecks.mapNotNull { it.piltoverArchiveId }.toSet()
 
             for (paDeck in paDecks) {
-                if (paDeck.uuid in knownPaIds) continue
+                if (paDeck.id in knownPaIds) continue
 
                 // Fetch full deck detail to get card entries
-                val detail = piltoverArchiveClient.getDeck(paDeck.uuid).getOrNull() ?: continue
+                val detail = piltoverArchiveClient.getDeck(paDeck.id).getOrNull() ?: continue
 
                 // Create deck in app
                 val deckId = java.util.UUID.randomUUID().toString()
@@ -144,30 +148,28 @@ class PiltoverArchiveService @Inject constructor(
                     rulesetId = "riftbound",
                     createdAt = now,
                     updatedAt = now,
-                    piltoverArchiveId = detail.uuid,
+                    piltoverArchiveId = detail.id,
                 ))
 
                 // Create entries (map PA card IDs back to name slugs)
-                val paIdToSlug = slugToPaId.entries.associate { (slug, id) -> id to slug }
+                val paIdToSlug = slugToPaCardId.entries.associate { (slug, id) -> id to slug }
                 val entries = mutableListOf<DeckEntryEntity>()
-                detail.sections?.let { sections ->
-                    fun addEntries(zone: DeckZone, cards: List<PiltoverArchiveClient.DeckCardEntry>) {
-                        for (card in cards) {
-                            val nameSlug = paIdToSlug[card.cardId] ?: continue
-                            entries.add(DeckEntryEntity(
-                                deckId = deckId,
-                                zone = zone.name,
-                                nameSlug = nameSlug,
-                                quantity = card.quantity,
-                            ))
-                        }
+                fun addEntries(zone: DeckZone, cards: List<PiltoverArchiveClient.PaDeckCardEntry>) {
+                    for (card in cards) {
+                        val nameSlug = paIdToSlug[card.cardId] ?: continue
+                        entries.add(DeckEntryEntity(
+                            deckId = deckId,
+                            zone = zone.name,
+                            nameSlug = nameSlug,
+                            quantity = card.quantity ?: 1,
+                        ))
                     }
-                    addEntries(DeckZone.chosenChampion, sections.champions)
-                    addEntries(DeckZone.battlefield, sections.battlefields)
-                    addEntries(DeckZone.rune, sections.runes)
-                    addEntries(DeckZone.main, sections.maindeck)
-                    addEntries(DeckZone.sideboard, sections.sideboard)
                 }
+                detail.champions.let { addEntries(DeckZone.chosenChampion, it) }
+                detail.battlefields.let { addEntries(DeckZone.battlefield, it) }
+                detail.runes.let { addEntries(DeckZone.rune, it) }
+                detail.maindeck.let { addEntries(DeckZone.main, it) }
+                detail.sideboard.let { addEntries(DeckZone.sideboard, it) }
                 if (entries.isNotEmpty()) {
                     deckDao.insertEntries(entries)
                 }
@@ -179,7 +181,7 @@ class PiltoverArchiveService @Inject constructor(
 
         SyncResult(
             inventorySynced = errors.none { it.startsWith("CardNexus") },
-            cardsMapped = cardsMapped,
+            cardsMapped = slugToPaCardId.size,
             collectionEntriesPushed = collectionEntriesPushed,
             decksPushed = decksPushed,
             decksPulled = decksPulled,
@@ -190,24 +192,24 @@ class PiltoverArchiveService @Inject constructor(
     private fun buildPaDeck(
         name: String,
         entries: List<DeckEntryEntity>,
-        slugToPaId: Map<String, String>,
-    ): PiltoverArchiveClient.DeckCreate {
-        val champions = mutableListOf<PiltoverArchiveClient.DeckCardEntry>()
-        val battlefields = mutableListOf<PiltoverArchiveClient.DeckCardEntry>()
-        val runes = mutableListOf<PiltoverArchiveClient.DeckCardEntry>()
-        val maindeck = mutableListOf<PiltoverArchiveClient.DeckCardEntry>()
-        val sideboard = mutableListOf<PiltoverArchiveClient.DeckCardEntry>()
+        slugToPaCardId: Map<String, String>,
+    ): PiltoverArchiveClient.DeckWrite {
+        val champions = mutableListOf<PiltoverArchiveClient.PaDeckCardEntry>()
+        val battlefields = mutableListOf<PiltoverArchiveClient.PaDeckCardEntry>()
+        val runes = mutableListOf<PiltoverArchiveClient.PaDeckCardEntry>()
+        val maindeck = mutableListOf<PiltoverArchiveClient.PaDeckCardEntry>()
+        val sideboard = mutableListOf<PiltoverArchiveClient.PaDeckCardEntry>()
 
         for (entry in entries) {
-            val paCardId = slugToPaId[entry.nameSlug] ?: continue
-            val paEntry = PiltoverArchiveClient.DeckCardEntry(
+            val paCardId = slugToPaCardId[entry.nameSlug] ?: continue
+            val paEntry = PiltoverArchiveClient.PaDeckCardEntry(
                 cardId = paCardId,
                 variantId = null,
                 quantity = entry.quantity,
             )
             val zone = DeckZone.fromString(entry.zone) ?: DeckZone.main
             when (zone) {
-                DeckZone.legend -> {} // Legend is separate in PA?
+                DeckZone.legend -> {} // Legend handled separately
                 DeckZone.chosenChampion -> champions.add(paEntry)
                 DeckZone.battlefield -> battlefields.add(paEntry)
                 DeckZone.rune -> runes.add(paEntry)
@@ -216,15 +218,13 @@ class PiltoverArchiveService @Inject constructor(
             }
         }
 
-        return PiltoverArchiveClient.DeckCreate(
+        return PiltoverArchiveClient.DeckWrite(
             name = name,
-            sections = PiltoverArchiveClient.DeckSections(
-                champions = champions,
-                battlefields = battlefields,
-                runes = runes,
-                maindeck = maindeck,
-                sideboard = sideboard,
-            ),
+            champions = champions,
+            battlefields = battlefields,
+            runes = runes,
+            maindeck = maindeck,
+            sideboard = sideboard,
         )
     }
 }
