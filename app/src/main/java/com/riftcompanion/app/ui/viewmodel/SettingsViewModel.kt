@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -42,7 +43,6 @@ data class SettingsUiState(
     val hasPiltoverArchiveToken: Boolean = false,
     val syncToPiltoverArchive: Boolean = false,
     val isPiltoverSyncing: Boolean = false,
-    val piltoverNeedsLogin: Boolean = false,
     val piltoverSyncMessage: String? = null,
     val piltoverSyncError: String? = null,
 )
@@ -77,7 +77,7 @@ class SettingsViewModel @Inject constructor(
                     geminiApiKey = data.geminiApiKey,
                     hasGeminiApiKey = !data.geminiApiKey.isNullOrBlank(),
                     priceMarket = data.priceMarket,
-                    hasPiltoverArchiveToken = credentialStore.hasValidPiltoverArchiveToken(),
+                    hasPiltoverArchiveToken = _uiState.value.hasPiltoverArchiveToken,
                     syncToPiltoverArchive = data.syncToPiltoverArchive,
                 )
             }
@@ -87,6 +87,8 @@ class SettingsViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(lastSyncTimestamp = it)
             }
         }
+        // Read PA credential status once on startup
+        _uiState.value = _uiState.value.copy(hasPiltoverArchiveToken = credentialStore.hasValidPiltoverArchiveToken())
     }
 
     fun setAppearance(value: AppAppearance) {
@@ -126,18 +128,36 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun savePiltoverArchiveToken(token: String, expiresAt: Long) {
-        android.util.Log.d("PiltoverSync", "savePiltoverArchiveToken: token=${token.take(20)}... expiresAt=$expiresAt")
+        android.util.Log.d("PiltoverSync", "savePiltoverArchiveToken: expiresAt=$expiresAt")
         credentialStore.savePiltoverArchiveToken(token, expiresAt)
         _uiState.value = _uiState.value.copy(hasPiltoverArchiveToken = true)
     }
 
     fun setSyncToPiltoverArchive(value: Boolean) {
+        if (!value) {
+            credentialStore.deletePiltoverArchiveToken()
+            credentialStore.deletePiltoverArchiveCookies()
+            _uiState.update { it.copy(hasPiltoverArchiveToken = false) }
+        }
         viewModelScope.launch { settingsDataStore.setSyncToPiltoverArchive(value) }
     }
 
     fun savePiltoverArchiveCookies(cookies: String) {
+        android.util.Log.d("PiltoverSync", "savePiltoverArchiveCookies called")
         credentialStore.savePiltoverArchiveCookies(cookies)
-        _uiState.value = _uiState.value.copy(hasPiltoverArchiveToken = true)
+        val verified = credentialStore.hasValidPiltoverArchiveToken()
+        android.util.Log.d("PiltoverSync", "cookies saved, hasValid immediately after=$verified")
+        _uiState.update { it.copy(hasPiltoverArchiveToken = true) }
+    }
+
+    /** Called after WebView login — enables PA sync and triggers full sync immediately. */
+    fun enablePiltoverSyncAndSync() {
+        android.util.Log.d("PiltoverSync", "enablePiltoverSyncAndSync called")
+        _uiState.update { it.copy(syncToPiltoverArchive = true) }
+        viewModelScope.launch {
+            settingsDataStore.setSyncToPiltoverArchive(true)
+            synchronize()
+        }
     }
 
     fun syncPiltoverArchive() {
@@ -157,10 +177,10 @@ class SettingsViewModel @Inject constructor(
             )
             android.util.Log.d("PiltoverSync", "Starting sync...")
             val result = piltoverArchiveService.sync()
-            android.util.Log.d("PiltoverSync", "Sync done: mapped=${result.cardsMapped} pushed=${result.collectionEntriesPushed} decks=${result.decksPushed} pulled=${result.decksPulled} errors=${result.errors}")
+            android.util.Log.d("PiltoverSync", "Sync done: mapped=${result.cardsMapped} pushed=${result.collectionEntriesPushed} decks=${result.decksPushed} errors=${result.errors}")
             _uiState.value = _uiState.value.copy(
                 isPiltoverSyncing = false,
-                piltoverSyncMessage = "Synced: ${result.cardsMapped} cards mapped, ${result.collectionEntriesPushed} collection entries, ${result.decksPushed} decks pushed, ${result.decksPulled} decks pulled.",
+                piltoverSyncMessage = "Synced: ${result.cardsMapped} cards mapped, ${result.collectionEntriesPushed} collection entries, ${result.decksPushed} decks pushed.",
                 piltoverSyncError = if (result.errors.isNotEmpty()) result.errors.joinToString("; ") else null,
             )
         }
@@ -223,14 +243,6 @@ class SettingsViewModel @Inject constructor(
      */
     fun synchronize() {
         if (_uiState.value.isSyncing) return
-
-        // If PA sync is enabled but we don't have credentials, open login first
-        if (_uiState.value.syncToPiltoverArchive && !credentialStore.hasValidPiltoverArchiveToken()) {
-            _uiState.value = _uiState.value.copy(piltoverNeedsLogin = true)
-            return
-        }
-
-        _uiState.value = _uiState.value.copy(piltoverNeedsLogin = false)
 
         val isMetered = NetworkUtils.isMeteredConnection(context)
         _uiState.value = _uiState.value.copy(isMeteredConnection = isMetered)
@@ -295,7 +307,7 @@ class SettingsViewModel @Inject constructor(
                             syncMessage = "$cnMessage · Syncing to Piltover Archive…",
                         )
                         val paResult = piltoverArchiveService.sync()
-                        val paMessage = "PA: ${paResult.cardsMapped} cards mapped, ${paResult.collectionEntriesPushed} collection entries, ${paResult.decksPushed} decks pushed, ${paResult.decksPulled} decks pulled"
+                        val paMessage = "PA: ${paResult.cardsMapped} cards mapped, ${paResult.collectionEntriesPushed} collection entries, ${paResult.decksPushed} decks pushed"
                         _uiState.value = _uiState.value.copy(
                             isSyncing = false,
                             syncMessage = "$cnMessage · $paMessage",

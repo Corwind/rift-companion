@@ -94,12 +94,6 @@ fun SettingsScreen(
     var apiKey by remember { mutableStateOf("") }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    LaunchedEffect(uiState.piltoverNeedsLogin) {
-        if (uiState.piltoverNeedsLogin) {
-            onPiltoverArchiveLogin()
-        }
-    }
-
     Scaffold(
 
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
@@ -205,7 +199,13 @@ fun SettingsScreen(
                         Text("Synchronizing…", color = MaterialTheme.colorScheme.onSurface)
                     }
                 } else {
-                    Button(onClick = { viewModel.synchronize() }, enabled = uiState.hasApiKey, modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = {
+                        if (uiState.syncToPiltoverArchive && !uiState.hasPiltoverArchiveToken) {
+                            onPiltoverArchiveLogin()
+                        } else {
+                            viewModel.synchronize()
+                        }
+                    }, enabled = uiState.hasApiKey, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Refresh, contentDescription = null)
                         Spacer(Modifier.size(8.dp))
                         Text("Synchronize Now")

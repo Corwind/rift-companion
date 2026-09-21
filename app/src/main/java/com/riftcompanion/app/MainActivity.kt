@@ -272,6 +272,7 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                     composable("settings") {
                         SettingsScreen(
                             onPiltoverArchiveLogin = { navController.navigate("paLogin") },
+                            viewModel = settingsViewModel,
                         )
                     }
                     composable("rules") {
@@ -363,9 +364,8 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                             onBack = { navController.popBackStack() },
                             onCookiesCaptured = { cookies ->
                                 settingsViewModel.savePiltoverArchiveCookies(cookies)
+                                settingsViewModel.enablePiltoverSyncAndSync()
                                 navController.popBackStack()
-                                // Trigger full sync (CardNexus + PA)
-                                settingsViewModel.synchronize()
                             },
                         )
                     }

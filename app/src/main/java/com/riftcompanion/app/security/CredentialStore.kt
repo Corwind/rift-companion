@@ -76,6 +76,10 @@ class CredentialStore private constructor(
             .apply()
     }
 
+    fun deletePiltoverArchiveCookies() {
+        prefs.edit().remove(KEY_PA_COOKIES).commit()
+    }
+
     fun hasValidPiltoverArchiveToken(): Boolean {
         // Check for cookies (preferred auth method — Clerk JWTs are too short-lived)
         val cookies = prefs.getString(KEY_PA_COOKIES, null)

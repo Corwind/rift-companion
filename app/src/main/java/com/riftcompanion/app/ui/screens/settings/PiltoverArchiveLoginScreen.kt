@@ -113,16 +113,21 @@ fun PiltoverArchiveLoginScreen(
                                         if (done || attempts >= maxAttempts) return
                                         attempts++
                                         val cm = CookieManager.getInstance()
-                                        // Gather cookies from both domains
+                                        // Gather cookies from all relevant domains
                                         val mainCookies = cm.getCookie("https://piltoverarchive.com") ?: ""
                                         val clerkCookies = cm.getCookie("https://clerk.piltoverarchive.com") ?: ""
-                                        val allCookies = listOf(mainCookies, clerkCookies)
+                                        val accountsCookies = cm.getCookie("https://accounts.piltoverarchive.com") ?: ""
+                                        val allCookies = listOf(mainCookies, clerkCookies, accountsCookies)
                                             .filter { it.isNotBlank() }
                                             .joinToString("; ")
-                                        // Check if we have a session cookie
-                                        if (allCookies.contains("__session") || allCookies.contains("__clerk_db_jwt")) {
+                                        android.util.Log.d("PiltoverSync", "Cookie capture attempt $attempts: main=${mainCookies.length} clerk=${clerkCookies.length} accounts=${accountsCookies.length}")
+                                        // Check if we have any auth-related cookie
+                                        if (allCookies.contains("__session") || allCookies.contains("__clerk_db_jwt") || allCookies.contains("__client_uat")) {
                                             done = true
+                                            android.util.Log.d("PiltoverSync", "Cookies captured, calling onCookiesCaptured")
                                             activity?.runOnUiThread { onCookiesCaptured(allCookies) }
+                                        } else if (attempts >= maxAttempts) {
+                                            android.util.Log.d("PiltoverSync", "Max attempts reached, no auth cookies found")
                                         } else {
                                             handler.postDelayed(this, 500)
                                         }

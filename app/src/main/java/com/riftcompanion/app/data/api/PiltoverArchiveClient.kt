@@ -2,46 +2,153 @@ package com.riftcompanion.app.data.api
 
 import com.riftcompanion.app.security.CredentialStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Client for the Piltover Archive external API.
  *
  * Base URL: https://piltoverarchive.com/api/external/v1
- * Auth: Bearer token (Clerk session token from captive WebView login)
+ * Auth: Bearer token (Clerk session JWT, cached and refreshed on expiry)
  *
  * API responses wrap lists in {"data": [...], "pagination": {...}}.
  * Cards have a nested structure: variant `id` → `card.id` (card UUID) + `card.name`.
  */
+@Singleton
 class PiltoverArchiveClient @Inject constructor(
     private val credentialStore: CredentialStore,
     private val okHttpClient: OkHttpClient,
 ) {
     companion object {
         const val BASE_URL = "https://piltoverarchive.com/api/external/v1"
+        const val CLERK_PUBLISHABLE_KEY = "pk_live_Y2xlcmsucGlsdG92ZXJhcmNoaXZlLmNvbSQ"
         private val json = Json { ignoreUnknownKeys = true; isLenient = true }
     }
 
+    @Volatile
+    private var cachedJwt: String? = null
+    @Volatile
+    private var cachedJwtExpiry: Long = 0L
+
     private fun authRequestBuilder(url: String): Request.Builder {
-        val cookies = credentialStore.loadPiltoverArchiveCookies()
-        val token = credentialStore.loadPiltoverArchiveToken()
+        val token = getFreshClerkToken()
         val builder = Request.Builder().url(url)
-        // Prefer cookie-based auth (Clerk session cookies are long-lived)
-        if (!cookies.isNullOrBlank()) {
-            builder.header("Cookie", cookies)
-        } else if (!token.isNullOrBlank()) {
+        if (token != null) {
             builder.header("Authorization", "Bearer $token")
         } else {
             throw Exception("No Piltover Archive credentials. Please log in.")
         }
         return builder
+    }
+
+    /**
+     * Gets a Clerk session JWT, cached until expiry (minus 10s buffer).
+     * Clerk JWTs expire in ~60s, so we refresh only when expired.
+     */
+    @Synchronized
+    private fun getFreshClerkToken(): String? {
+        // Return cached JWT if still valid
+        val now = System.currentTimeMillis()
+        if (cachedJwt != null && now < cachedJwtExpiry) {
+            return cachedJwt
+        }
+
+        val cookies = credentialStore.loadPiltoverArchiveCookies()
+        if (cookies.isNullOrBlank()) return credentialStore.loadPiltoverArchiveToken()
+
+        return try {
+            // Step 1: Get session ID from Clerk
+            val clientRequest = Request.Builder()
+                .url("https://clerk.piltoverarchive.com/v1/client")
+                .header("Cookie", cookies)
+                .header("Authorization", CLERK_PUBLISHABLE_KEY)
+                .get()
+                .build()
+            val clientResponse = okHttpClient.newCall(clientRequest).execute()
+            if (!clientResponse.isSuccessful) {
+                android.util.Log.d("PiltoverSync", "Clerk client fetch failed: ${clientResponse.code}")
+                clientResponse.close()
+                return credentialStore.loadPiltoverArchiveToken()
+            }
+            val clientBody = clientResponse.body!!.string()
+            clientResponse.close()
+
+            val sessionId = try {
+                val parsed = json.decodeFromString(JsonObject.serializer(), clientBody)
+                parsed["response"]?.jsonObject?.get("last_active_session_id")?.jsonPrimitive?.content
+            } catch (e: Exception) {
+                android.util.Log.d("PiltoverSync", "Failed to parse Clerk client: ${e.message}")
+                null
+            }
+
+            if (sessionId == null) {
+                android.util.Log.d("PiltoverSync", "No active Clerk session")
+                return credentialStore.loadPiltoverArchiveToken()
+            }
+
+            // Step 2: Get fresh JWT
+            val tokenRequest = Request.Builder()
+                .url("https://clerk.piltoverarchive.com/v1/client/sessions/$sessionId/tokens")
+                .header("Cookie", cookies)
+                .header("Authorization", CLERK_PUBLISHABLE_KEY)
+                .post(ByteArray(0).toRequestBody("application/json".toMediaType()))
+                .build()
+            val tokenResponse = okHttpClient.newCall(tokenRequest).execute()
+            if (!tokenResponse.isSuccessful) {
+                android.util.Log.d("PiltoverSync", "Clerk token fetch failed: ${tokenResponse.code}")
+                tokenResponse.close()
+                return credentialStore.loadPiltoverArchiveToken()
+            }
+            val tokenBody = tokenResponse.body!!.string()
+            tokenResponse.close()
+
+            val jwt = try {
+                val parsed = json.decodeFromString(JsonObject.serializer(), tokenBody)
+                parsed["jwt"]?.jsonPrimitive?.content
+            } catch (e: Exception) {
+                android.util.Log.d("PiltoverSync", "Failed to parse Clerk token: ${e.message}")
+                null
+            }
+
+            if (jwt != null) {
+                cachedJwt = jwt
+                cachedJwtExpiry = extractJwtExpiry(jwt) - 10_000 // 10s buffer
+                android.util.Log.d("PiltoverSync", "Clerk JWT cached")
+            }
+            jwt
+        } catch (e: Exception) {
+            android.util.Log.d("PiltoverSync", "getFreshClerkToken failed: ${e.message}")
+            credentialStore.loadPiltoverArchiveToken()
+        }
+    }
+
+    private fun extractJwtExpiry(token: String): Long {
+        try {
+            val parts = token.split(".")
+            if (parts.size < 2) return System.currentTimeMillis() + 60_000
+            val payload = parts[1]
+            val decoded = android.util.Base64.decode(
+                payload.padEnd(payload.length + (4 - payload.length % 4) % 4, '='),
+                android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP,
+            ).toString(Charsets.UTF_8)
+            val expRegex = """"exp"\s*:\s*(\d+)""".toRegex()
+            val match = expRegex.find(decoded)
+            if (match != null) return match.groupValues[1].toLong() * 1000
+        } catch (_: Exception) {}
+        return System.currentTimeMillis() + 60_000
     }
 
     fun isAvailable(): Boolean = credentialStore.hasValidPiltoverArchiveToken()
@@ -92,10 +199,11 @@ class PiltoverArchiveClient @Inject constructor(
         val hasPrevious: Boolean = false,
     )
 
-    /** Fetch all card variants. Returns a map of card name → cardId (first variant found). */
-    suspend fun fetchAllCards(): Result<Map<String, String>> = withContext(Dispatchers.IO) {
+    /** Fetch all card variants. Returns a map of card name → Pair(cardId, variantId), and a map of variantNumber → variantId. */
+    suspend fun fetchAllCards(): Result<Pair<Map<String, Pair<String, String>>, Map<String, String>>> = withContext(Dispatchers.IO) {
         runCatching {
-            val result = mutableMapOf<String, String>()
+            val result = mutableMapOf<String, Pair<String, String>>()
+            val variantNumberMap = mutableMapOf<String, String>()
             var page = 1
             val limit = 100
             do {
@@ -115,14 +223,19 @@ class PiltoverArchiveClient @Inject constructor(
                 for (variant in parsed.data) {
                     val cardName = variant.card?.name ?: continue
                     val cardId = variant.card.id
-                    // Keep first variant's cardId per name
+                    val variantId = variant.id
+                    // Keep first variant per name
                     if (cardName !in result) {
-                        result[cardName] = cardId
+                        result[cardName] = cardId to variantId
+                    }
+                    // Also map variantNumber → variantId for collection matching
+                    if (!variant.variantNumber.isNullOrBlank()) {
+                        variantNumberMap[variant.variantNumber] = variantId
                     }
                 }
                 page++
             } while (parsed.pagination?.hasNext == true)
-            result
+            result to variantNumberMap
         }
     }
 
@@ -130,7 +243,8 @@ class PiltoverArchiveClient @Inject constructor(
 
     @Serializable
     data class CollectionEntry(
-        val cardId: String,
+        val id: String? = null,
+        val collectionId: String? = null,
         val variantId: String? = null,
         val quantity: Int,
     )
@@ -138,39 +252,89 @@ class PiltoverArchiveClient @Inject constructor(
     @Serializable
     data class CollectionListResponse(
         val data: List<CollectionEntry> = emptyList(),
+        val pagination: Pagination? = null,
     )
 
     suspend fun getCollection(): Result<List<CollectionEntry>> = withContext(Dispatchers.IO) {
         runCatching {
-            val request = authRequestBuilder("$BASE_URL/collection/export").build()
-            val response = okHttpClient.newCall(request).execute()
-            if (!response.isSuccessful) throw Exception("PA collection export failed: ${response.code}")
-            val body = response.body!!.string()
-            response.close()
-            val parsed = json.decodeFromString(CollectionListResponse.serializer(), body)
-            parsed.data
+            val allEntries = mutableListOf<CollectionEntry>()
+            var page = 1
+            val limit = 100
+            do {
+                val url = "$BASE_URL/collection?limit=$limit&page=$page"
+                val request = authRequestBuilder(url).build()
+                val response = okHttpClient.newCall(request).execute()
+                if (!response.isSuccessful) {
+                    android.util.Log.d("PiltoverSync", "getCollection: page $page failed ${response.code}, falling back to /export")
+                    response.close()
+                    if (page == 1) {
+                        val exportRequest = authRequestBuilder("$BASE_URL/collection/export").build()
+                        val exportResponse = okHttpClient.newCall(exportRequest).execute()
+                        if (!exportResponse.isSuccessful) throw Exception("PA collection export failed: ${exportResponse.code}")
+                        val exportBody = exportResponse.body!!.string()
+                        exportResponse.close()
+                        return@runCatching json.decodeFromString(CollectionListResponse.serializer(), exportBody).data
+                    }
+                    break
+                }
+                val body = response.body!!.string()
+                response.close()
+                val parsed = json.decodeFromString(CollectionListResponse.serializer(), body)
+                allEntries.addAll(parsed.data)
+                android.util.Log.d("PiltoverSync", "getCollection: page $page, got ${parsed.data.size} entries (total ${allEntries.size})")
+                page++
+            } while (parsed.pagination?.hasNext == true && page <= 1000)
+            android.util.Log.d("PiltoverSync", "getCollection: total ${allEntries.size} entries, first id=${allEntries.firstOrNull()?.id}")
+            allEntries
         }
     }
 
     @Serializable
     data class CollectionUpdate(
-        val cardId: String,
-        val variantId: String? = null,
+        val variantId: String,
         val quantity: Int,
     )
 
-    suspend fun updateCollection(entries: List<CollectionUpdate>): Result<Unit> = withContext(Dispatchers.IO) {
+    /** Create a new collection entry. */
+    suspend fun createCollectionEntry(entry: CollectionUpdate): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            for (entry in entries) {
-                val body = json.encodeToString(CollectionUpdate.serializer(), entry)
-                    .toRequestBody("application/json".toMediaType())
-                val request = authRequestBuilder("$BASE_URL/collection/${entry.cardId}")
-                    .patch(body)
-                    .build()
-                val response = okHttpClient.newCall(request).execute()
-                if (!response.isSuccessful) throw Exception("PA collection update failed: ${response.code}")
-                response.close()
+            val body = json.encodeToString(CollectionUpdate.serializer(), entry)
+                .toRequestBody("application/json".toMediaType())
+            val request = authRequestBuilder("$BASE_URL/collection")
+                .post(body)
+                .build()
+            val response = okHttpClient.newCall(request).execute()
+            if (!response.isSuccessful) throw Exception("PA collection create failed: ${response.code}")
+            response.close()
+        }
+    }
+
+    /** Update an existing collection entry's quantity. Path uses variantId (UUID). */
+    suspend fun updateCollectionEntry(variantId: String, quantity: Int): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val body = """{"quantity":$quantity}""".toRequestBody("application/json".toMediaType())
+            val request = authRequestBuilder("$BASE_URL/collection/$variantId")
+                .patch(body)
+                .build()
+            val response = okHttpClient.newCall(request).execute()
+            if (!response.isSuccessful) {
+                val errorBody = response.body?.string()
+                android.util.Log.d("PiltoverSync", "PATCH collection FAILED: ${response.code}: ${errorBody?.take(200)}")
+                throw Exception("PA collection update failed: ${response.code}")
             }
+            response.close()
+        }
+    }
+
+    /** Delete a collection entry. Path uses variantId (UUID). */
+    suspend fun deleteCollectionEntry(variantId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val request = authRequestBuilder("$BASE_URL/collection/$variantId")
+                .delete()
+                .build()
+            val response = okHttpClient.newCall(request).execute()
+            if (!response.isSuccessful) throw Exception("PA collection delete failed: ${response.code}")
+            response.close()
         }
     }
 
@@ -180,6 +344,14 @@ class PiltoverArchiveClient @Inject constructor(
     data class PaDeckCardEntry(
         val cardId: String,
         val variantId: String? = null,
+        val quantity: Int? = null,
+    )
+
+    /** Entry for writing decks — both cardId and variantId are required. */
+    @Serializable
+    data class PaDeckWriteEntry(
+        val cardId: String,
+        val variantId: String,
         val quantity: Int? = null,
     )
 
@@ -194,6 +366,7 @@ class PiltoverArchiveClient @Inject constructor(
     data class PaDeckDetail(
         val id: String,
         val name: String,
+        val authorId: String? = null,
         val description: String? = null,
         val legend: PaDeckLegend? = null,
         val champions: List<PaDeckCardEntry> = emptyList(),
@@ -211,9 +384,70 @@ class PiltoverArchiveClient @Inject constructor(
         val pagination: Pagination? = null,
     )
 
-    suspend fun getDecks(limit: Int = 100): Result<List<PaDeckDetail>> = withContext(Dispatchers.IO) {
+    /** Get the current user's PA UUID from Clerk session user.external_id. */
+    fun getPaUserId(): String? {
+        val cookies = credentialStore.loadPiltoverArchiveCookies()
+        if (cookies.isNullOrBlank()) return null
+
+        return try {
+            val clientRequest = Request.Builder()
+                .url("https://clerk.piltoverarchive.com/v1/client")
+                .header("Cookie", cookies)
+                .header("Authorization", CLERK_PUBLISHABLE_KEY)
+                .get()
+                .build()
+            val clientResponse = okHttpClient.newCall(clientRequest).execute()
+            if (!clientResponse.isSuccessful) {
+                clientResponse.close()
+                return null
+            }
+            val clientBody = clientResponse.body!!.string()
+            clientResponse.close()
+
+            val parsed = json.decodeFromString(JsonObject.serializer(), clientBody)
+            val sessions = parsed["response"]?.jsonObject?.get("sessions")?.jsonArray
+            val firstSession = sessions?.firstOrNull()?.jsonObject
+            val user = firstSession?.get("user")?.jsonObject
+            if (user != null) {
+                // PA stores their UUID in external_id
+                val externalId = user["external_id"]?.jsonPrimitive?.content
+                if (externalId != null) return externalId
+                // Fall back to public_metadata
+                val publicMetadata = user["public_metadata"]?.jsonObject
+                if (publicMetadata != null) {
+                    for (key in publicMetadata.keys) {
+                        val value = publicMetadata[key]?.jsonPrimitive?.content
+                        if (value != null && value.contains('-')) return value
+                    }
+                }
+            }
+            null
+        } catch (e: Exception) {
+            android.util.Log.d("PiltoverSync", "getPaUserId failed: ${e.message}")
+            null
+        }
+    }
+
+    /** Get the current user's decks (including private/draft). Requires auth. */
+    suspend fun getMyDecks(): Result<List<PaDeckDetail>> = withContext(Dispatchers.IO) {
         runCatching {
-            val url = "$BASE_URL/decks?limit=$limit"
+            val request = authRequestBuilder("$BASE_URL/decks/my").build()
+            val response = okHttpClient.newCall(request).execute()
+            if (!response.isSuccessful) throw Exception("PA get my decks failed: ${response.code}")
+            val body = response.body!!.string()
+            response.close()
+            val parsed = json.decodeFromString(DeckListResponse.serializer(), body)
+            parsed.data
+        }
+    }
+
+    suspend fun getDecks(limit: Int = 100, authorId: String? = null, page: Int = 1): Result<List<PaDeckDetail>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val url = if (authorId != null) {
+                "$BASE_URL/decks?limit=$limit&page=$page&authorId=$authorId"
+            } else {
+                "$BASE_URL/decks?limit=$limit&page=$page"
+            }
             val request = authRequestBuilder(url).build()
             val response = okHttpClient.newCall(request).execute()
             if (!response.isSuccessful) throw Exception("PA get decks failed: ${response.code}")
@@ -240,12 +474,12 @@ class PiltoverArchiveClient @Inject constructor(
         val name: String,
         val description: String? = null,
         val legendId: String? = null,
-        val champions: List<PaDeckCardEntry> = emptyList(),
-        val battlefields: List<PaDeckCardEntry> = emptyList(),
-        val runes: List<PaDeckCardEntry> = emptyList(),
-        val maindeck: List<PaDeckCardEntry> = emptyList(),
-        val sideboard: List<PaDeckCardEntry> = emptyList(),
-        val bench: List<PaDeckCardEntry> = emptyList(),
+        val champions: List<PaDeckWriteEntry> = emptyList(),
+        val battlefields: List<PaDeckWriteEntry> = emptyList(),
+        val runes: List<PaDeckWriteEntry> = emptyList(),
+        val maindeck: List<PaDeckWriteEntry> = emptyList(),
+        val sideboard: List<PaDeckWriteEntry> = emptyList(),
+        val bench: List<PaDeckWriteEntry> = emptyList(),
     )
 
     suspend fun createDeck(deck: DeckWrite): Result<PaDeckDetail> = withContext(Dispatchers.IO) {
@@ -256,7 +490,11 @@ class PiltoverArchiveClient @Inject constructor(
                 .post(body)
                 .build()
             val response = okHttpClient.newCall(request).execute()
-            if (!response.isSuccessful) throw Exception("PA create deck failed: ${response.code}")
+            if (!response.isSuccessful) {
+                val errorBody = response.body?.string()
+                android.util.Log.d("PiltoverSync", "createDeck FAILED: ${response.code}: ${errorBody?.take(300)}")
+                throw Exception("PA create deck failed: ${response.code}")
+            }
             val responseBody = response.body!!.string()
             response.close()
             json.decodeFromString(PaDeckDetail.serializer(), responseBody)
@@ -271,10 +509,75 @@ class PiltoverArchiveClient @Inject constructor(
                 .patch(body)
                 .build()
             val response = okHttpClient.newCall(request).execute()
-            if (!response.isSuccessful) throw Exception("PA update deck failed: ${response.code}")
+            if (!response.isSuccessful) {
+                val errorBody = response.body?.string()
+                android.util.Log.d("PiltoverSync", "updateDeck FAILED: ${response.code}: ${errorBody?.take(300)}")
+                response.close()
+                throw Exception("PA update deck failed: ${response.code}")
+            }
             val responseBody = response.body!!.string()
             response.close()
             json.decodeFromString(PaDeckDetail.serializer(), responseBody)
         }
+    }
+
+    /** Try to update a deck, removing entries with unknown variant IDs. Returns the deck detail or null. */
+    suspend fun updateDeckSafe(uuid: String, deck: DeckWrite): Result<PaDeckDetail?> = withContext(Dispatchers.IO) {
+        runCatching {
+            updateDeckSafeRecursive(uuid, deck, maxRetries = 5)
+        }
+    }
+
+    private suspend fun updateDeckSafeRecursive(uuid: String, deck: DeckWrite, maxRetries: Int): PaDeckDetail? {
+        val body = json.encodeToString(DeckWrite.serializer(), deck)
+            .toRequestBody("application/json".toMediaType())
+        val request = authRequestBuilder("$BASE_URL/decks/$uuid")
+            .patch(body)
+            .build()
+        val response = okHttpClient.newCall(request).execute()
+        if (response.isSuccessful) {
+            val responseBody = response.body!!.string()
+            response.close()
+            return json.decodeFromString(PaDeckDetail.serializer(), responseBody)
+        }
+        if (response.code == 400 && maxRetries > 0) {
+            val errorBody = response.body?.string()
+            response.close()
+            android.util.Log.d("PiltoverSync", "updateDeckSafe: 400, retrying (retries left=$maxRetries): ${errorBody?.take(200)}")
+            val unknownIds = extractUnknownVariantIds(errorBody)
+            if (unknownIds.isEmpty()) return null
+            val filteredDeck = filterDeckEntries(deck, unknownIds)
+            return updateDeckSafeRecursive(uuid, filteredDeck, maxRetries - 1)
+        }
+        android.util.Log.d("PiltoverSync", "updateDeckSafe: ${response.code}")
+        response.close()
+        return null
+    }
+
+    private fun extractUnknownVariantIds(errorBody: String?): Set<String> {
+        if (errorBody == null) return emptySet()
+        return try {
+            val parsed = json.decodeFromString(JsonObject.serializer(), errorBody)
+            val details = parsed["details"]?.jsonObject
+            val variantIds = details?.get("variantIds")?.jsonArray
+            variantIds?.mapNotNull { it.jsonPrimitive.content }?.toSet() ?: emptySet()
+        } catch (e: Exception) {
+            emptySet()
+        }
+    }
+
+    private fun filterDeckEntries(deck: DeckWrite, unknownIds: Set<String>): DeckWrite {
+        fun filter(entries: List<PaDeckWriteEntry>) = entries.filter { it.variantId !in unknownIds }
+        // Also clear legendId if it's an unknown variant
+        val filteredLegendId = if (deck.legendId != null && unknownIds.any { id -> deck.legendId == id }) null else deck.legendId
+        return deck.copy(
+            legendId = filteredLegendId,
+            champions = filter(deck.champions),
+            battlefields = filter(deck.battlefields),
+            runes = filter(deck.runes),
+            maindeck = filter(deck.maindeck),
+            sideboard = filter(deck.sideboard),
+            bench = filter(deck.bench),
+        )
     }
 }
