@@ -165,29 +165,29 @@ fun SettingsScreen(
             }
 
             SettingsCard("Piltover Archive", Icons.Default.CloudSync) {
-                if (uiState.isPiltoverSyncing) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Syncing…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Sync to Piltover Archive", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (uiState.hasPiltoverArchiveToken) "Logged in" else "Not logged in",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (uiState.hasPiltoverArchiveToken) com.riftcompanion.app.ui.theme.freeColor() else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
-                } else {
-                    Button(
-                        onClick = {
-                            if (uiState.hasPiltoverArchiveToken) {
-                                viewModel.syncPiltoverArchive()
-                            } else {
+                    Switch(
+                        checked = uiState.syncToPiltoverArchive,
+                        onCheckedChange = { value ->
+                            if (value && !uiState.hasPiltoverArchiveToken) {
                                 onPiltoverArchiveLogin()
+                            } else {
+                                viewModel.setSyncToPiltoverArchive(value)
                             }
                         },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("Sync with Piltover Archive")
-                    }
-                }
-                uiState.piltoverSyncMessage?.let {
-                    Spacer(Modifier.height(4.dp))
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
                 }
                 uiState.piltoverSyncError?.let {
                     Spacer(Modifier.height(4.dp))
