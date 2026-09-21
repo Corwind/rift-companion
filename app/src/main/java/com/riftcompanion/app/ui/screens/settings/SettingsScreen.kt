@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -82,6 +84,7 @@ import com.riftcompanion.app.ui.viewmodel.SettingsViewModel
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
+    onPiltoverArchiveLogin: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -161,6 +164,33 @@ fun SettingsScreen(
                 }
             }
 
+            SettingsCard("Piltover Archive", Icons.Default.CloudSync) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Sync to Piltover Archive", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (uiState.hasPiltoverArchiveToken) "Logged in" else "Not logged in — sync will prompt login",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (uiState.hasPiltoverArchiveToken) com.riftcompanion.app.ui.theme.freeColor() else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = uiState.syncToPiltoverArchive,
+                        onCheckedChange = { value ->
+                            viewModel.setSyncToPiltoverArchive(value)
+                        },
+                    )
+                }
+                uiState.piltoverSyncError?.let {
+                    Spacer(Modifier.height(4.dp))
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
+            }
+
             // Synchronization
             SettingsCard("Synchronization", Icons.Default.Sync) {
                 if (uiState.isSyncing) {
@@ -169,7 +199,13 @@ fun SettingsScreen(
                         Text("Synchronizing…", color = MaterialTheme.colorScheme.onSurface)
                     }
                 } else {
-                    Button(onClick = { viewModel.synchronize() }, enabled = uiState.hasApiKey, modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = {
+                        if (uiState.syncToPiltoverArchive && !uiState.hasPiltoverArchiveToken) {
+                            onPiltoverArchiveLogin()
+                        } else {
+                            viewModel.synchronize()
+                        }
+                    }, enabled = uiState.hasApiKey, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Refresh, contentDescription = null)
                         Spacer(Modifier.size(8.dp))
                         Text("Synchronize Now")

@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -39,6 +40,11 @@ data class SettingsUiState(
     val geminiApiKey: String? = null,
     val hasGeminiApiKey: Boolean = false,
     val priceMarket: com.riftcompanion.app.data.prefs.PriceMarket = com.riftcompanion.app.data.prefs.PriceMarket.EUR,
+    val hasPiltoverArchiveToken: Boolean = false,
+    val syncToPiltoverArchive: Boolean = false,
+    val isPiltoverSyncing: Boolean = false,
+    val piltoverSyncMessage: String? = null,
+    val piltoverSyncError: String? = null,
 )
 
 @HiltViewModel
@@ -46,6 +52,7 @@ class SettingsViewModel @Inject constructor(
     private val settingsDataStore: SettingsDataStore,
     private val credentialStore: CredentialStore,
     private val repository: RiftRepository,
+    private val piltoverArchiveService: com.riftcompanion.app.data.api.PiltoverArchiveService,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -70,6 +77,8 @@ class SettingsViewModel @Inject constructor(
                     geminiApiKey = data.geminiApiKey,
                     hasGeminiApiKey = !data.geminiApiKey.isNullOrBlank(),
                     priceMarket = data.priceMarket,
+                    hasPiltoverArchiveToken = _uiState.value.hasPiltoverArchiveToken,
+                    syncToPiltoverArchive = data.syncToPiltoverArchive,
                 )
             }
         }
@@ -78,6 +87,8 @@ class SettingsViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(lastSyncTimestamp = it)
             }
         }
+        // Read PA credential status once on startup
+        _uiState.value = _uiState.value.copy(hasPiltoverArchiveToken = credentialStore.hasValidPiltoverArchiveToken())
     }
 
     fun setAppearance(value: AppAppearance) {
@@ -114,6 +125,57 @@ class SettingsViewModel @Inject constructor(
 
     fun setPriceMarket(value: com.riftcompanion.app.data.prefs.PriceMarket) {
         viewModelScope.launch { settingsDataStore.setPriceMarket(value) }
+    }
+
+    fun savePiltoverArchiveToken(token: String, expiresAt: Long) {
+        credentialStore.savePiltoverArchiveToken(token, expiresAt)
+        _uiState.value = _uiState.value.copy(hasPiltoverArchiveToken = true)
+    }
+
+    fun setSyncToPiltoverArchive(value: Boolean) {
+        if (!value) {
+            credentialStore.deletePiltoverArchiveToken()
+            credentialStore.deletePiltoverArchiveCookies()
+            _uiState.update { it.copy(hasPiltoverArchiveToken = false) }
+        }
+        viewModelScope.launch { settingsDataStore.setSyncToPiltoverArchive(value) }
+    }
+
+    fun savePiltoverArchiveCookies(cookies: String) {
+        credentialStore.savePiltoverArchiveCookies(cookies)
+        val verified = credentialStore.hasValidPiltoverArchiveToken()
+        _uiState.update { it.copy(hasPiltoverArchiveToken = true) }
+    }
+
+    /** Called after WebView login — enables PA sync and triggers full sync immediately. */
+    fun enablePiltoverSyncAndSync() {
+        _uiState.update { it.copy(syncToPiltoverArchive = true) }
+        viewModelScope.launch {
+            settingsDataStore.setSyncToPiltoverArchive(true)
+            synchronize()
+        }
+    }
+
+    fun syncPiltoverArchive() {
+        if (!credentialStore.hasValidPiltoverArchiveToken()) {
+            _uiState.value = _uiState.value.copy(
+                piltoverSyncError = "Not logged in to Piltover Archive. Please log in first.",
+            )
+            return
+        }
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isPiltoverSyncing = true,
+                piltoverSyncMessage = null,
+                piltoverSyncError = null,
+            )
+            val result = piltoverArchiveService.sync()
+            _uiState.value = _uiState.value.copy(
+                isPiltoverSyncing = false,
+                piltoverSyncMessage = "Synced: ${result.cardsMapped} cards mapped, ${result.collectionEntriesPushed} collection entries, ${result.decksPushed} decks pushed.",
+                piltoverSyncError = if (result.errors.isNotEmpty()) result.errors.joinToString("; ") else null,
+            )
+        }
     }
 
     /**
@@ -229,11 +291,28 @@ class SettingsViewModel @Inject constructor(
             val result = repository.synchronize(forceCatalogue = forceCatalogue)
             result.fold(
                 onSuccess = { syncResult ->
-                    _uiState.value = _uiState.value.copy(
-                        isSyncing = false,
-                        syncMessage = "Sync complete: ${syncResult.inventoryLines} inventory lines, ${syncResult.locations} locations",
-                        lastSyncTimestamp = syncResult.completedAt,
-                    )
+                    val cnMessage = "Sync complete: ${syncResult.inventoryLines} inventory lines, ${syncResult.locations} locations"
+
+                    // If PA sync is enabled and we have credentials, sync to PA too
+                    if (_uiState.value.syncToPiltoverArchive && credentialStore.hasValidPiltoverArchiveToken()) {
+                        _uiState.value = _uiState.value.copy(
+                            syncMessage = "$cnMessage · Syncing to Piltover Archive…",
+                        )
+                        val paResult = piltoverArchiveService.sync()
+                        val paMessage = "PA: ${paResult.cardsMapped} cards mapped, ${paResult.collectionEntriesPushed} collection entries, ${paResult.decksPushed} decks pushed"
+                        _uiState.value = _uiState.value.copy(
+                            isSyncing = false,
+                            syncMessage = "$cnMessage · $paMessage",
+                            lastSyncTimestamp = syncResult.completedAt,
+                            piltoverSyncError = if (paResult.errors.isNotEmpty()) paResult.errors.joinToString("; ") else null,
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            isSyncing = false,
+                            syncMessage = cnMessage,
+                            lastSyncTimestamp = syncResult.completedAt,
+                        )
+                    }
                 },
                 onFailure = { error ->
                     _uiState.value = _uiState.value.copy(
