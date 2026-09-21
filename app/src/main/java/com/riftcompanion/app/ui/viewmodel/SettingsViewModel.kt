@@ -122,6 +122,11 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsDataStore.setPriceMarket(value) }
     }
 
+    fun savePiltoverArchiveToken(token: String, expiresAt: Long) {
+        credentialStore.savePiltoverArchiveToken(token, expiresAt)
+        _uiState.value = _uiState.value.copy(hasPiltoverArchiveToken = true)
+    }
+
     fun syncPiltoverArchive() {
         if (!credentialStore.hasValidPiltoverArchiveToken()) {
             _uiState.value = _uiState.value.copy(

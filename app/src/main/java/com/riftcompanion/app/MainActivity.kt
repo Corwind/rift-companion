@@ -60,6 +60,7 @@ import com.riftcompanion.app.ui.screens.catalogue.CatalogueScreen
 import com.riftcompanion.app.ui.screens.decks.DeckBuildScreen
 import com.riftcompanion.app.ui.screens.decks.DeckDisassembleScreen
 import com.riftcompanion.app.ui.screens.decks.DeckStatsScreen
+import com.riftcompanion.app.ui.screens.settings.PiltoverArchiveLoginScreen
 import com.riftcompanion.app.ui.screens.decks.DeckDetailScreen
 import com.riftcompanion.app.ui.screens.rules.RulesSearchScreen
 import com.riftcompanion.app.ui.screens.decks.DeckFromLocationScreen
@@ -269,7 +270,9 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                         )
                     }
                     composable("settings") {
-                        SettingsScreen()
+                        SettingsScreen(
+                            onPiltoverArchiveLogin = { navController.navigate("paLogin") },
+                        )
                     }
                     composable("rules") {
                         RulesSearchScreen(
@@ -353,6 +356,15 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                         DeckStatsScreen(
                             deckId = deckId,
                             onBack = { navController.popBackStack() },
+                        )
+                    }
+                    composable("paLogin") {
+                        PiltoverArchiveLoginScreen(
+                            onBack = { navController.popBackStack() },
+                            onTokenCaptured = { token, expiresAt ->
+                                settingsViewModel.savePiltoverArchiveToken(token, expiresAt)
+                                navController.popBackStack()
+                            },
                         )
                     }
                 }

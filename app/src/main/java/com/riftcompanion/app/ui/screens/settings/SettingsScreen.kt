@@ -84,6 +84,7 @@ import com.riftcompanion.app.ui.viewmodel.SettingsViewModel
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
+    onPiltoverArchiveLogin: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -312,6 +313,10 @@ fun SettingsScreen(
                     Text("Not logged in", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(8.dp))
                     Text("Log in to Piltover Archive to sync your inventory and decks.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = onPiltoverArchiveLogin, modifier = Modifier.fillMaxWidth()) {
+                        Text("Log in to Piltover Archive")
+                    }
                 }
             }
 
