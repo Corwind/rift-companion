@@ -42,6 +42,7 @@ data class SettingsUiState(
     val hasPiltoverArchiveToken: Boolean = false,
     val syncToPiltoverArchive: Boolean = false,
     val isPiltoverSyncing: Boolean = false,
+    val piltoverNeedsLogin: Boolean = false,
     val piltoverSyncMessage: String? = null,
     val piltoverSyncError: String? = null,
 )
@@ -222,6 +223,14 @@ class SettingsViewModel @Inject constructor(
      */
     fun synchronize() {
         if (_uiState.value.isSyncing) return
+
+        // If PA sync is enabled but we don't have credentials, open login first
+        if (_uiState.value.syncToPiltoverArchive && !credentialStore.hasValidPiltoverArchiveToken()) {
+            _uiState.value = _uiState.value.copy(piltoverNeedsLogin = true)
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(piltoverNeedsLogin = false)
 
         val isMetered = NetworkUtils.isMeteredConnection(context)
         _uiState.value = _uiState.value.copy(isMeteredConnection = isMetered)

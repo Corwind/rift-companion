@@ -363,9 +363,8 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                             onBack = { navController.popBackStack() },
                             onCookiesCaptured = { cookies ->
                                 settingsViewModel.savePiltoverArchiveCookies(cookies)
-                                settingsViewModel.setSyncToPiltoverArchive(true)
                                 navController.popBackStack()
-                                // Auto-sync after login
+                                // Trigger full sync (CardNexus + PA)
                                 settingsViewModel.synchronize()
                             },
                         )

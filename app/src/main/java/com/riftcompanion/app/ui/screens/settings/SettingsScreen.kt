@@ -94,6 +94,12 @@ fun SettingsScreen(
     var apiKey by remember { mutableStateOf("") }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
+    LaunchedEffect(uiState.piltoverNeedsLogin) {
+        if (uiState.piltoverNeedsLogin) {
+            onPiltoverArchiveLogin()
+        }
+    }
+
     Scaffold(
 
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
@@ -173,7 +179,7 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Sync to Piltover Archive", style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            if (uiState.hasPiltoverArchiveToken) "Logged in" else "Not logged in",
+                            if (uiState.hasPiltoverArchiveToken) "Logged in" else "Not logged in — sync will prompt login",
                             style = MaterialTheme.typography.bodySmall,
                             color = if (uiState.hasPiltoverArchiveToken) com.riftcompanion.app.ui.theme.freeColor() else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -181,11 +187,7 @@ fun SettingsScreen(
                     Switch(
                         checked = uiState.syncToPiltoverArchive,
                         onCheckedChange = { value ->
-                            if (value && !uiState.hasPiltoverArchiveToken) {
-                                onPiltoverArchiveLogin()
-                            } else {
-                                viewModel.setSyncToPiltoverArchive(value)
-                            }
+                            viewModel.setSyncToPiltoverArchive(value)
                         },
                     )
                 }
