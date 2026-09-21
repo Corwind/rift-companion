@@ -79,7 +79,6 @@ class PiltoverArchiveClient @Inject constructor(
                 .build()
             val clientResponse = okHttpClient.newCall(clientRequest).execute()
             if (!clientResponse.isSuccessful) {
-                android.util.Log.d("PiltoverSync", "Clerk client fetch failed: ${clientResponse.code}")
                 clientResponse.close()
                 return credentialStore.loadPiltoverArchiveToken()
             }
@@ -90,12 +89,10 @@ class PiltoverArchiveClient @Inject constructor(
                 val parsed = json.decodeFromString(JsonObject.serializer(), clientBody)
                 parsed["response"]?.jsonObject?.get("last_active_session_id")?.jsonPrimitive?.content
             } catch (e: Exception) {
-                android.util.Log.d("PiltoverSync", "Failed to parse Clerk client: ${e.message}")
                 null
             }
 
             if (sessionId == null) {
-                android.util.Log.d("PiltoverSync", "No active Clerk session")
                 return credentialStore.loadPiltoverArchiveToken()
             }
 
@@ -108,7 +105,6 @@ class PiltoverArchiveClient @Inject constructor(
                 .build()
             val tokenResponse = okHttpClient.newCall(tokenRequest).execute()
             if (!tokenResponse.isSuccessful) {
-                android.util.Log.d("PiltoverSync", "Clerk token fetch failed: ${tokenResponse.code}")
                 tokenResponse.close()
                 return credentialStore.loadPiltoverArchiveToken()
             }
@@ -119,18 +115,15 @@ class PiltoverArchiveClient @Inject constructor(
                 val parsed = json.decodeFromString(JsonObject.serializer(), tokenBody)
                 parsed["jwt"]?.jsonPrimitive?.content
             } catch (e: Exception) {
-                android.util.Log.d("PiltoverSync", "Failed to parse Clerk token: ${e.message}")
                 null
             }
 
             if (jwt != null) {
                 cachedJwt = jwt
                 cachedJwtExpiry = extractJwtExpiry(jwt) - 10_000 // 10s buffer
-                android.util.Log.d("PiltoverSync", "Clerk JWT cached")
             }
             jwt
         } catch (e: Exception) {
-            android.util.Log.d("PiltoverSync", "getFreshClerkToken failed: ${e.message}")
             credentialStore.loadPiltoverArchiveToken()
         }
     }
@@ -207,13 +200,10 @@ class PiltoverArchiveClient @Inject constructor(
             val limit = 100
             do {
                 val url = "$BASE_URL/cards?limit=$limit&page=$page"
-                android.util.Log.d("PiltoverSync", "fetchAllCards: fetching page $page")
                 val request = authRequestBuilder(url).build()
                 val response = okHttpClient.newCall(request).execute()
-                android.util.Log.d("PiltoverSync", "fetchAllCards: page $page response ${response.code}")
                 if (!response.isSuccessful) {
                     val errorBody = response.body?.string()
-                    android.util.Log.d("PiltoverSync", "fetchAllCards: error body: ${errorBody?.take(200)}")
                     throw Exception("PA cards fetch failed: ${response.code}")
                 }
                 val body = response.body!!.string()
@@ -260,7 +250,6 @@ class PiltoverArchiveClient @Inject constructor(
                 val request = authRequestBuilder(url).build()
                 val response = okHttpClient.newCall(request).execute()
                 if (!response.isSuccessful) {
-                    android.util.Log.d("PiltoverSync", "getCollection: page $page failed ${response.code}, falling back to /export")
                     response.close()
                     if (page == 1) {
                         val exportRequest = authRequestBuilder("$BASE_URL/collection/export").build()
@@ -276,10 +265,8 @@ class PiltoverArchiveClient @Inject constructor(
                 response.close()
                 val parsed = json.decodeFromString(CollectionListResponse.serializer(), body)
                 allEntries.addAll(parsed.data)
-                android.util.Log.d("PiltoverSync", "getCollection: page $page, got ${parsed.data.size} entries (total ${allEntries.size})")
                 page++
             } while (parsed.pagination?.hasNext == true && page <= 1000)
-            android.util.Log.d("PiltoverSync", "getCollection: total ${allEntries.size} entries, first id=${allEntries.firstOrNull()?.id}")
             allEntries
         }
     }
@@ -314,7 +301,6 @@ class PiltoverArchiveClient @Inject constructor(
             val response = okHttpClient.newCall(request).execute()
             if (!response.isSuccessful) {
                 val errorBody = response.body?.string()
-                android.util.Log.d("PiltoverSync", "PATCH collection FAILED: ${response.code}: ${errorBody?.take(200)}")
                 throw Exception("PA collection update failed: ${response.code}")
             }
             response.close()
@@ -418,7 +404,6 @@ class PiltoverArchiveClient @Inject constructor(
             }
             null
         } catch (e: Exception) {
-            android.util.Log.d("PiltoverSync", "getPaUserId failed: ${e.message}")
             null
         }
     }
@@ -487,7 +472,6 @@ class PiltoverArchiveClient @Inject constructor(
             val response = okHttpClient.newCall(request).execute()
             if (!response.isSuccessful) {
                 val errorBody = response.body?.string()
-                android.util.Log.d("PiltoverSync", "createDeck FAILED: ${response.code}: ${errorBody?.take(300)}")
                 throw Exception("PA create deck failed: ${response.code}")
             }
             val responseBody = response.body!!.string()
@@ -506,7 +490,6 @@ class PiltoverArchiveClient @Inject constructor(
             val response = okHttpClient.newCall(request).execute()
             if (!response.isSuccessful) {
                 val errorBody = response.body?.string()
-                android.util.Log.d("PiltoverSync", "updateDeck FAILED: ${response.code}: ${errorBody?.take(300)}")
                 response.close()
                 throw Exception("PA update deck failed: ${response.code}")
             }
@@ -538,13 +521,11 @@ class PiltoverArchiveClient @Inject constructor(
         if (response.code == 400 && maxRetries > 0) {
             val errorBody = response.body?.string()
             response.close()
-            android.util.Log.d("PiltoverSync", "updateDeckSafe: 400, retrying (retries left=$maxRetries): ${errorBody?.take(200)}")
             val unknownIds = extractUnknownVariantIds(errorBody)
             if (unknownIds.isEmpty()) return null
             val filteredDeck = filterDeckEntries(deck, unknownIds)
             return updateDeckSafeRecursive(uuid, filteredDeck, maxRetries - 1)
         }
-        android.util.Log.d("PiltoverSync", "updateDeckSafe: ${response.code}")
         response.close()
         return null
     }

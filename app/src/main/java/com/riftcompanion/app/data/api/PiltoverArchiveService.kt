@@ -46,22 +46,16 @@ class PiltoverArchiveService @Inject constructor(
 
         // 1. Re-sync from CardNexus (source of truth) — best effort, continue with local data if rate-limited
         try {
-            android.util.Log.d("PiltoverSync", "Step 1: CardNexus sync...")
             repository.synchronize().getOrThrow()
-            android.util.Log.d("PiltoverSync", "Step 1: CardNexus sync done")
         } catch (e: Exception) {
-            android.util.Log.d("PiltoverSync", "Step 1: CardNexus sync failed (will use local data): ${e.message}")
             // Don't add to errors — we can still sync local data to PA
         }
 
         // 2. Fetch all PA cards and build variantNumber → (cardId, variantId) map
-        android.util.Log.d("PiltoverSync", "Step 2: Fetching PA cards...")
         val paVariantMap = try {
             val map = piltoverArchiveClient.fetchAllCards().getOrThrow()
-            android.util.Log.d("PiltoverSync", "Step 2: Got ${map.size} PA card variants")
             map
         } catch (e: Exception) {
-            android.util.Log.d("PiltoverSync", "Step 2 FAILED: ${e.message}")
             errors.add("PA card fetch failed: ${e.message}")
             return@withContext SyncResult(
                 inventorySynced = errors.none { it.startsWith("CardNexus") },
@@ -75,7 +69,6 @@ class PiltoverArchiveService @Inject constructor(
         // Build productId → (cardId, variantId) map using variantNumber matching
         // Each printing has a specific expansionSlug + printNumber → exact PA variantNumber
         val printings = cardPrintingDao.getAll().first()
-        android.util.Log.d("PiltoverSync", "Step 2b: ${printings.size} local printings")
         // Map expansionSlug → PA set prefix
         val expansionToPrefix = mapOf(
             "arcane-box-set" to "ARC",
@@ -110,7 +103,6 @@ class PiltoverArchiveService @Inject constructor(
                 }
             }
         }
-        android.util.Log.d("PiltoverSync", "Step 2c: mapped ${productToPaIds.size} productIds to PA card IDs, $unmatchedCount unmatched")
         
         // Also build nameSlug → (cardId, variantId) for deck sync (use first matched printing per slug)
         val slugToPaIds = mutableMapOf<String, Pair<String, String>>()
@@ -125,19 +117,15 @@ class PiltoverArchiveService @Inject constructor(
         var collectionEntriesPushed = 0
         var paCollectionEntries: List<PiltoverArchiveClient.CollectionEntry> = emptyList()
         try {
-            android.util.Log.d("PiltoverSync", "Step 3: Reading local inventory...")
             val lines = inventoryLineDao.getAll().first()
-            android.util.Log.d("PiltoverSync", "Step 3: Got ${lines.size} local inventory lines")
 
             // Export existing PA collection
             val paCollectionResult = piltoverArchiveClient.getCollection()
             if (paCollectionResult.isFailure) {
-                android.util.Log.d("PiltoverSync", "Step 3: collection export failed: ${paCollectionResult.exceptionOrNull()?.message}")
             }
             val paCollection = paCollectionResult.getOrNull() ?: emptyList()
             paCollectionEntries = paCollection
             val paVariantIds = paCollection.mapNotNull { it.variantId }.toSet()
-            android.util.Log.d("PiltoverSync", "Step 3: ${paCollection.size} existing PA collection entries")
 
             // Build CN variantId → quantity map (using exact productId → variantId mapping)
             val cnQuantitiesByVariantId = mutableMapOf<String, Int>()
@@ -146,7 +134,6 @@ class PiltoverArchiveService @Inject constructor(
                 val paIds = productToPaIds[line.productId] ?: continue
                 cnQuantitiesByVariantId[paIds.second] = (cnQuantitiesByVariantId[paIds.second] ?: 0) + line.quantity
             }
-            android.util.Log.d("PiltoverSync", "Step 3: ${cnQuantitiesByVariantId.size} unique cards to sync")
 
             // PATCH existing entries with updated quantities, DELETE removed entries
             var patched = 0
@@ -179,9 +166,7 @@ class PiltoverArchiveService @Inject constructor(
             }
 
             collectionEntriesPushed = cnQuantitiesByVariantId.size
-            android.util.Log.d("PiltoverSync", "Step 3: done — patched=$patched created=$created deleted=$deleted total=${cnQuantitiesByVariantId.size}")
         } catch (e: Exception) {
-            android.util.Log.d("PiltoverSync", "Step 3 FAILED: ${e.message}")
             errors.add("Collection push failed: ${e.message}")
         }
 
@@ -189,23 +174,18 @@ class PiltoverArchiveService @Inject constructor(
         var decksPushed = 0
         try {
             val decks = deckDao.getAllDecks().first()
-            android.util.Log.d("PiltoverSync", "Step 4: ${decks.size} decks to push")
             for (deck in decks) {
                 val entries = deckDao.getEntriesForDeck(deck.id)
                 val paDeck = buildPaDeck(deck.name, entries, slugToPaIds)
-                android.util.Log.d("PiltoverSync", "Step 4: pushing deck '${deck.name}' (${entries.size} entries)")
                 if (deck.piltoverArchiveId != null) {
                     val updated = piltoverArchiveClient.updateDeckSafe(deck.piltoverArchiveId, paDeck).getOrNull()
                 } else {
                     val created = piltoverArchiveClient.createDeck(paDeck).getOrThrow()
                     deckDao.insertDeck(deck.copy(piltoverArchiveId = created.id))
-                    android.util.Log.d("PiltoverSync", "Step 4: created deck in PA with id=${created.id}")
                 }
                 decksPushed++
             }
-            android.util.Log.d("PiltoverSync", "Step 4: done, pushed $decksPushed decks")
         } catch (e: Exception) {
-            android.util.Log.d("PiltoverSync", "Step 4 FAILED: ${e.message}")
             errors.add("Deck push failed: ${e.message}")
         }
 
@@ -217,7 +197,6 @@ class PiltoverArchiveService @Inject constructor(
 
             // Use /decks/my to get all our decks (including private/draft)
             val paDecks = piltoverArchiveClient.getMyDecks().getOrNull() ?: emptyList()
-            android.util.Log.d("PiltoverSync", "Step 5: ${paDecks.size} PA decks, ${knownPaIds.size} already linked")
 
             // Reverse map: variantId → nameSlug
             val paIdToSlug = mutableMapOf<String, String>()
@@ -260,7 +239,6 @@ class PiltoverArchiveService @Inject constructor(
                             quantity = 1,
                         ))
                     } else {
-                        android.util.Log.d("PiltoverSync", "Step 5: could not map legend variantId=$legendId to slug")
                     }
                 }
                 
@@ -284,11 +262,8 @@ class PiltoverArchiveService @Inject constructor(
                     deckDao.insertEntries(entries)
                 }
                 decksPulled++
-                android.util.Log.d("PiltoverSync", "Step 5: pulled deck '${detail.name}' with ${entries.size} entries")
             }
-            android.util.Log.d("PiltoverSync", "Step 5: done, pulled $decksPulled decks")
         } catch (e: Exception) {
-            android.util.Log.d("PiltoverSync", "Step 5 FAILED: ${e.message}")
             errors.add("Deck pull failed: ${e.message}")
         }
 
@@ -324,7 +299,6 @@ class PiltoverArchiveService @Inject constructor(
             when (zone) {
                 DeckZone.legend -> {
                     legendId = paIds.second
-                    android.util.Log.d("PiltoverSync", "Step 4: legend '${entry.nameSlug}' → variantId=${paIds.second}")
                 }
                 DeckZone.chosenChampion -> champions.add(paEntry)
                 DeckZone.battlefield -> battlefields.add(paEntry)

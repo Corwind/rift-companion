@@ -128,7 +128,6 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun savePiltoverArchiveToken(token: String, expiresAt: Long) {
-        android.util.Log.d("PiltoverSync", "savePiltoverArchiveToken: expiresAt=$expiresAt")
         credentialStore.savePiltoverArchiveToken(token, expiresAt)
         _uiState.value = _uiState.value.copy(hasPiltoverArchiveToken = true)
     }
@@ -143,16 +142,13 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun savePiltoverArchiveCookies(cookies: String) {
-        android.util.Log.d("PiltoverSync", "savePiltoverArchiveCookies called")
         credentialStore.savePiltoverArchiveCookies(cookies)
         val verified = credentialStore.hasValidPiltoverArchiveToken()
-        android.util.Log.d("PiltoverSync", "cookies saved, hasValid immediately after=$verified")
         _uiState.update { it.copy(hasPiltoverArchiveToken = true) }
     }
 
     /** Called after WebView login — enables PA sync and triggers full sync immediately. */
     fun enablePiltoverSyncAndSync() {
-        android.util.Log.d("PiltoverSync", "enablePiltoverSyncAndSync called")
         _uiState.update { it.copy(syncToPiltoverArchive = true) }
         viewModelScope.launch {
             settingsDataStore.setSyncToPiltoverArchive(true)
@@ -161,9 +157,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun syncPiltoverArchive() {
-        android.util.Log.d("PiltoverSync", "syncPiltoverArchive called, hasToken=${credentialStore.hasValidPiltoverArchiveToken()}")
         if (!credentialStore.hasValidPiltoverArchiveToken()) {
-            android.util.Log.d("PiltoverSync", "No valid token — cannot sync")
             _uiState.value = _uiState.value.copy(
                 piltoverSyncError = "Not logged in to Piltover Archive. Please log in first.",
             )
@@ -175,9 +169,7 @@ class SettingsViewModel @Inject constructor(
                 piltoverSyncMessage = null,
                 piltoverSyncError = null,
             )
-            android.util.Log.d("PiltoverSync", "Starting sync...")
             val result = piltoverArchiveService.sync()
-            android.util.Log.d("PiltoverSync", "Sync done: mapped=${result.cardsMapped} pushed=${result.collectionEntriesPushed} decks=${result.decksPushed} errors=${result.errors}")
             _uiState.value = _uiState.value.copy(
                 isPiltoverSyncing = false,
                 piltoverSyncMessage = "Synced: ${result.cardsMapped} cards mapped, ${result.collectionEntriesPushed} collection entries, ${result.decksPushed} decks pushed.",

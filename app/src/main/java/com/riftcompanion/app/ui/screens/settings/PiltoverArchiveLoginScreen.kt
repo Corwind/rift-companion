@@ -120,14 +120,11 @@ fun PiltoverArchiveLoginScreen(
                                         val allCookies = listOf(mainCookies, clerkCookies, accountsCookies)
                                             .filter { it.isNotBlank() }
                                             .joinToString("; ")
-                                        android.util.Log.d("PiltoverSync", "Cookie capture attempt $attempts: main=${mainCookies.length} clerk=${clerkCookies.length} accounts=${accountsCookies.length}")
                                         // Check if we have any auth-related cookie
                                         if (allCookies.contains("__session") || allCookies.contains("__clerk_db_jwt") || allCookies.contains("__client_uat")) {
                                             done = true
-                                            android.util.Log.d("PiltoverSync", "Cookies captured, calling onCookiesCaptured")
                                             activity?.runOnUiThread { onCookiesCaptured(allCookies) }
                                         } else if (attempts >= maxAttempts) {
-                                            android.util.Log.d("PiltoverSync", "Max attempts reached, no auth cookies found")
                                         } else {
                                             handler.postDelayed(this, 500)
                                         }
