@@ -39,6 +39,10 @@ data class SettingsUiState(
     val geminiApiKey: String? = null,
     val hasGeminiApiKey: Boolean = false,
     val priceMarket: com.riftcompanion.app.data.prefs.PriceMarket = com.riftcompanion.app.data.prefs.PriceMarket.EUR,
+    val hasPiltoverArchiveToken: Boolean = false,
+    val isPiltoverSyncing: Boolean = false,
+    val piltoverSyncMessage: String? = null,
+    val piltoverSyncError: String? = null,
 )
 
 @HiltViewModel
@@ -46,6 +50,7 @@ class SettingsViewModel @Inject constructor(
     private val settingsDataStore: SettingsDataStore,
     private val credentialStore: CredentialStore,
     private val repository: RiftRepository,
+    private val piltoverArchiveService: com.riftcompanion.app.data.api.PiltoverArchiveService,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -70,6 +75,7 @@ class SettingsViewModel @Inject constructor(
                     geminiApiKey = data.geminiApiKey,
                     hasGeminiApiKey = !data.geminiApiKey.isNullOrBlank(),
                     priceMarket = data.priceMarket,
+                    hasPiltoverArchiveToken = credentialStore.hasValidPiltoverArchiveToken(),
                 )
             }
         }
@@ -114,6 +120,28 @@ class SettingsViewModel @Inject constructor(
 
     fun setPriceMarket(value: com.riftcompanion.app.data.prefs.PriceMarket) {
         viewModelScope.launch { settingsDataStore.setPriceMarket(value) }
+    }
+
+    fun syncPiltoverArchive() {
+        if (!credentialStore.hasValidPiltoverArchiveToken()) {
+            _uiState.value = _uiState.value.copy(
+                piltoverSyncError = "Not logged in to Piltover Archive. Please log in first.",
+            )
+            return
+        }
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isPiltoverSyncing = true,
+                piltoverSyncMessage = null,
+                piltoverSyncError = null,
+            )
+            val result = piltoverArchiveService.sync()
+            _uiState.value = _uiState.value.copy(
+                isPiltoverSyncing = false,
+                piltoverSyncMessage = "Synced: ${result.cardsMapped} cards mapped, ${result.collectionEntriesPushed} collection entries, ${result.decksPushed} decks pushed, ${result.decksPulled} decks pulled.",
+                piltoverSyncError = if (result.errors.isNotEmpty()) result.errors.joinToString("; ") else null,
+            )
+        }
     }
 
     /**
