@@ -31,6 +31,13 @@ interface CardIdentityDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(entities: List<CardIdentityEntity>)
 
+    @Query("""
+        UPDATE card_identities
+        SET power = :power, mightBonus = :mightBonus, maxCopies = :maxCopies, banEffectiveDate = :banEffectiveDate
+        WHERE nameSlug = :nameSlug
+    """)
+    suspend fun updatePaFields(nameSlug: String, power: Int?, mightBonus: Int?, maxCopies: Int?, banEffectiveDate: String?)
+
     @Query("DELETE FROM card_identities")
     suspend fun deleteAll()
 

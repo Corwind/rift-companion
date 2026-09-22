@@ -163,6 +163,9 @@ class PiltoverArchiveClient @Inject constructor(
         val energy: Int? = null,
         val might: Int? = null,
         val power: Int? = null,
+        val mightBonus: Int? = null,
+        val maxCopies: Int? = null,
+        val banEffectiveDate: String? = null,
     )
 
     @Serializable
@@ -192,10 +195,14 @@ class PiltoverArchiveClient @Inject constructor(
         val hasPrevious: Boolean = false,
     )
 
-    /** Fetch all card variants. Returns a map of variantNumber → Pair(cardId, variantId). */
-    suspend fun fetchAllCards(): Result<Map<String, Pair<String, String>>> = withContext(Dispatchers.IO) {
+    /** Fetch all card variants. Returns Pair(variantNumberMap, cardInfoMap) where:
+     *  - variantNumberMap: variantNumber → Pair(cardId, variantId)
+     *  - cardInfoMap: cardName → PaCardInfo (for enrichment)
+     */
+    suspend fun fetchAllCards(): Result<Pair<Map<String, Pair<String, String>>, Map<String, PaCardInfo>>> = withContext(Dispatchers.IO) {
         runCatching {
             val result = mutableMapOf<String, Pair<String, String>>()
+            val cardInfoMap = mutableMapOf<String, PaCardInfo>()
             var page = 1
             val limit = 100
             do {
@@ -217,10 +224,14 @@ class PiltoverArchiveClient @Inject constructor(
                     if (!variantNumber.isNullOrBlank()) {
                         result[variantNumber] = cardId to variantId
                     }
+                    // Keep card info for enrichment (first variant wins)
+                    if (cardName !in cardInfoMap) {
+                        cardInfoMap[cardName] = variant.card!!
+                    }
                 }
                 page++
             } while (parsed.pagination?.hasNext == true)
-            result
+            result to cardInfoMap
         }
     }
 

@@ -13,6 +13,7 @@ data class CardIdentity(
     val tags: List<String> = emptyList(),
     val energyCost: Int? = null,
     val might: Int? = null,
+    val power: Int? = null,
     val attributes: Map<String, JsonValue> = emptyMap(),
 ) {
     val id: String get() = nameSlug

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,9 +17,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.colorspace.ColorSpaces
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.riftcompanion.app.R
 import com.riftcompanion.app.ui.theme.domainColor
+
+fun domainIconResPublic(domain: String): Int = domainIconRes(domain)
+
+private fun domainIconRes(domain: String): Int = when (domain.lowercase()) {
+    "fury" -> R.drawable.domain_fury
+    "body" -> R.drawable.domain_body
+    "calm" -> R.drawable.domain_calm
+    "chaos" -> R.drawable.domain_chaos
+    "mind" -> R.drawable.domain_mind
+    "order" -> R.drawable.domain_order
+    else -> 0
+}
 
 private fun Color.brightenForDark(): Color = copy(
     red = (red * 0.5f + 0.5f).coerceIn(0f, 1f),
@@ -51,12 +68,22 @@ fun DomainTag(
             .background(color.copy(alpha = bgAlpha))
             .padding(horizontal = 8.dp, vertical = 5.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(color),
-        )
+        val iconRes = domainIconRes(domain)
+        if (iconRes != 0) {
+            Icon(
+                painter = painterResource(iconRes),
+                contentDescription = "$domain icon",
+                tint = color,
+                modifier = Modifier.size(12.dp),
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(color),
+            )
+        }
         Text(
             text = domain,
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),

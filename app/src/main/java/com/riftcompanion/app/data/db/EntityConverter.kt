@@ -48,6 +48,7 @@ object EntityConverter {
             tags = if (entity.tagsCsv.isBlank()) emptyList() else entity.tagsCsv.split(","),
             energyCost = entity.energyCost,
             might = entity.might,
+            power = entity.power,
             attributes = attributes,
         )
     }

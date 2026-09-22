@@ -18,6 +18,10 @@ data class CardIdentityEntity(
     val energyCost: Int?,
     val might: Int?,
     val attributesJson: String,  // JSON string
+    val power: Int? = null,           // from PA enrichment
+    val mightBonus: Int? = null,      // from PA enrichment
+    val maxCopies: Int? = null,       // from PA enrichment
+    val banEffectiveDate: String? = null, // from PA enrichment (ISO date)
 )
 
 @Entity(tableName = "card_printings", indices = [Index("nameSlug")])

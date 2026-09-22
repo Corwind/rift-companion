@@ -51,10 +51,10 @@ class PiltoverArchiveService @Inject constructor(
             // Don't add to errors — we can still sync local data to PA
         }
 
-        // 2. Fetch all PA cards and build variantNumber → (cardId, variantId) map
-        val paVariantMap = try {
-            val map = piltoverArchiveClient.fetchAllCards().getOrThrow()
-            map
+        // 2. Fetch all PA cards and build variantNumber → (cardId, variantId) map + card info map
+        val (paVariantMap, paCardInfoMap) = try {
+            val result = piltoverArchiveClient.fetchAllCards().getOrThrow()
+            result
         } catch (e: Exception) {
             errors.add("PA card fetch failed: ${e.message}")
             return@withContext SyncResult(
@@ -69,6 +69,7 @@ class PiltoverArchiveService @Inject constructor(
         // Build productId → (cardId, variantId) map using variantNumber matching
         // Each printing has a specific expansionSlug + printNumber → exact PA variantNumber
         val printings = cardPrintingDao.getAll().first()
+        val identities = cardIdentityDao.getAllCards()
         // Map expansionSlug → PA set prefix
         val expansionToPrefix = mapOf(
             "arcane-box-set" to "ARC",
@@ -117,6 +118,27 @@ class PiltoverArchiveService @Inject constructor(
             if (paIds != null && printing.nameSlug !in slugToPaIds) {
                 slugToPaIds[printing.nameSlug] = paIds
             }
+        }
+
+        // 2d. Enrich local card identities with PA data (power, mightBonus, maxCopies, banEffectiveDate)
+        var enrichedCount = 0
+        for (identity in identities) {
+            // Try exact name match, then comma substitution
+            val paCardInfo = paCardInfoMap[identity.displayName]
+                ?: paCardInfoMap[identity.displayName.replace(" - ", ", ")]
+            if (paCardInfo != null) {
+                cardIdentityDao.updatePaFields(
+                    nameSlug = identity.nameSlug,
+                    power = paCardInfo.power,
+                    mightBonus = paCardInfo.mightBonus,
+                    maxCopies = paCardInfo.maxCopies,
+                    banEffectiveDate = paCardInfo.banEffectiveDate,
+                )
+                enrichedCount++
+            }
+        }
+        if (enrichedCount > 0) {
+            android.util.Log.d("PiltoverSync", "Step 2d: enriched $enrichedCount card identities with PA data")
         }
 
         // 3. Sync collection: read local inventory → export PA → PATCH/POST/DELETE
