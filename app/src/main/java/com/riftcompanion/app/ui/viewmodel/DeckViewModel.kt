@@ -272,9 +272,12 @@ class DeckViewModel @Inject constructor(
             val storageLocations = locationPolicyDao.getStorageLocations().map { it.name.trim().lowercase() }.toSet()
             val deckLocations = locationPolicyDao.getByKind("deck").map { it.name.trim().lowercase() }.toSet()
 
-            // For each entry, compute availability
+            // For each entry, compute availability — track cards already claimed by earlier zones
             val linkedLoc = deck?.linkedLocationName
-            val display = entries.map { entry ->
+            val zoneOrder = listOf(DeckZone.legend, DeckZone.chosenChampion, DeckZone.main, DeckZone.sideboard, DeckZone.rune, DeckZone.battlefield)
+            val claimedBySlug = mutableMapOf<String, Int>()
+            val sortedEntries = entries.sortedBy { e -> zoneOrder.indexOf(DeckZone.fromString(e.zone) ?: DeckZone.main) }
+            val display = sortedEntries.map { entry ->
                 val identity = identities[entry.nameSlug]
                 val printings = allPrintings[entry.nameSlug] ?: emptyList()
                 val imageURL = printings.firstOrNull { !it.imageURL.isNullOrEmpty() }?.imageURL
@@ -287,12 +290,18 @@ class DeckViewModel @Inject constructor(
                 val availability = DeckAvailability.compute(
                     quantity = entry.quantity,
                     zone = zone,
+                    alreadyClaimed = claimedBySlug[entry.nameSlug] ?: 0,
                     lineLocations = lineLocs,
                     lineQuantities = lineQtys,
                     storageLocations = storageLocations,
                     deckLocations = deckLocations,
                     linkedLocation = linkedLoc,
                 )
+                // Track cards claimed by this entry for subsequent entries of the same card
+                if (zone != DeckZone.rune && zone != DeckZone.battlefield) {
+                    val claimed = minOf(availability.availableInStorage + availability.inDeckLocation, entry.quantity)
+                    claimedBySlug[entry.nameSlug] = (claimedBySlug[entry.nameSlug] ?: 0) + claimed
+                }
 
                 DeckEntryDisplay(
                     entryId = entry.id,
@@ -1404,8 +1413,11 @@ class DeckViewModel @Inject constructor(
         val storageLocations = locationPolicyDao.getStorageLocations().map { it.name.trim().lowercase() }.toSet()
         val deckLocations = locationPolicyDao.getByKind("deck").map { it.name.trim().lowercase() }.toSet()
         val linkedLoc = deckDao.getDeck(deckId)?.linkedLocationName
+        val zoneOrder = listOf(DeckZone.legend, DeckZone.chosenChampion, DeckZone.main, DeckZone.sideboard, DeckZone.rune, DeckZone.battlefield)
+        val claimedBySlug = mutableMapOf<String, Int>()
+        val sortedEntries = entries.sortedBy { e -> zoneOrder.indexOf(DeckZone.fromString(e.zone) ?: DeckZone.main) }
 
-        val display = entries.map { entry ->
+        val display = sortedEntries.map { entry ->
             val identity = identities[entry.nameSlug]
             val printings = allPrintings[entry.nameSlug] ?: emptyList()
             val imageURL = printings.firstOrNull { !it.imageURL.isNullOrEmpty() }?.imageURL
@@ -1415,12 +1427,17 @@ class DeckViewModel @Inject constructor(
             val availability = DeckAvailability.compute(
                 quantity = entry.quantity,
                 zone = zone,
+                alreadyClaimed = claimedBySlug[entry.nameSlug] ?: 0,
                 lineLocations = allLines.map { it.locationName },
                 lineQuantities = allLines.map { it.quantity },
                 storageLocations = storageLocations,
                 deckLocations = deckLocations,
                 linkedLocation = linkedLoc,
             )
+            if (zone != DeckZone.rune && zone != DeckZone.battlefield) {
+                val claimed = minOf(availability.availableInStorage + availability.inDeckLocation, entry.quantity)
+                claimedBySlug[entry.nameSlug] = (claimedBySlug[entry.nameSlug] ?: 0) + claimed
+            }
 
             DeckEntryDisplay(
                 entryId = entry.id,
