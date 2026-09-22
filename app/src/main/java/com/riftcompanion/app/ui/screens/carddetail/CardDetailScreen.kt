@@ -182,15 +182,18 @@ fun CardDetailScreen(
                 val isSpell = identity.cardType?.equals("Spell", ignoreCase = true) == true
                 if (!isLegend) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // Energy is a cost for all non-legend cards
+                        // Energy → Power → Might order
                         identity.energyCost?.let { StatCard("Energy", it.toString(), Icons.Default.Bolt) }
-                        // Might is a strength stat for units only, spells don't have it
+                        // Power: hide when 0, show domain icons when multiple domains
+                        val powerValue = identity.power
+                            ?: identity.attributes.firstDisplayValue(listOf("power", "attack", "strength"))
+                        if (powerValue != null && powerValue != 0) {
+                            PowerStatCard("Power", powerValue.toString(), identity.appVisibleDomains)
+                        }
+                        // Might is a strength stat for units only
                         if (isUnit) {
                             identity.might?.let { StatCard("Might", it.toString(), Icons.Default.FitnessCenter) }
                         }
-                        identity.attributes.firstDisplayValue(listOf("power", "attack", "strength"))?.let { StatCard("Power", it, Icons.Default.Shield) }
-                        identity.attributes.firstDisplayValue(listOf("health", "hp"))?.let { StatCard("Health", it, Icons.Default.Shield) }
-                        identity.attributes.firstDisplayValue(listOf("durability"))?.let { StatCard("Durability", it, Icons.Default.Shield) }
                     }
                     Spacer(Modifier.height(20.dp))
                 }
@@ -610,6 +613,39 @@ private fun StatCard(title: String, value: String, icon: androidx.compose.ui.gra
             }
             Spacer(Modifier.height(4.dp))
             Text(value, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
+        }
+    }
+}
+
+@Composable
+private fun PowerStatCard(title: String, value: String, domains: List<String>) {
+    ThemedCardSurface(cornerRadius = 10) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Shield, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                domains.forEachIndexed { index, domain ->
+                    if (index > 0) {
+                        Text("/", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    val color = com.riftcompanion.app.ui.theme.domainColor(domain)
+                    val iconRes = com.riftcompanion.app.ui.components.domainIconResPublic(domain)
+                    if (iconRes != 0) {
+                        Icon(
+                            painter = androidx.compose.ui.res.painterResource(iconRes),
+                            contentDescription = "$domain",
+                            tint = color,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+                Spacer(Modifier.width(2.dp))
+                Text(value, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
+            }
         }
     }
 }
