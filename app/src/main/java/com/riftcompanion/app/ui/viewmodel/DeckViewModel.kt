@@ -20,6 +20,7 @@ import com.riftcompanion.app.data.deck.TextDeckParser
 import com.riftcompanion.app.domain.model.CardIdentityInfo
 import com.riftcompanion.app.domain.model.DeckAvailability
 import com.riftcompanion.app.domain.model.DeckBuildPlanner
+import com.riftcompanion.app.domain.model.DeckMissingSummary
 import com.riftcompanion.app.domain.model.DeckZone
 import com.riftcompanion.app.domain.model.ValidationSeverity
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -37,6 +38,8 @@ import javax.inject.Inject
 data class DeckListUiState(
     val decks: List<DeckSummary> = emptyList(),
     val isLoading: Boolean = false,
+    val missingSummary: DeckMissingSummary.Summary? = null,
+    val isLoadingMissingSummary: Boolean = false,
 )
 
 data class DeckSummary(
@@ -260,6 +263,75 @@ class DeckViewModel @Inject constructor(
         }
     }
 
+    fun loadMissingSummary() {
+        viewModelScope.launch {
+            _deckListState.value = _deckListState.value.copy(isLoadingMissingSummary = true)
+            try {
+                val decks = deckDao.getAllDecks().first()
+                val identities = cardIdentityDao.getAll().first().associateBy { it.nameSlug }
+                val storageLocations = locationPolicyDao.getStorageLocations().map { it.name.trim().lowercase() }.toSet()
+                val deckLocations = locationPolicyDao.getByKind("deck").map { it.name.trim().lowercase() }.toSet()
+                val allInventoryLines = inventoryLineDao.getAll().first()
+                val allPrintings = cardPrintingDao.getAll().first()
+                val printingByProduct = allPrintings.associateBy { it.productID }
+
+                val deckInputs = decks.map { deck ->
+                    val entries = deckDao.getEntriesForDeck(deck.id)
+                    DeckMissingSummary.DeckInput(
+                        deckId = deck.id,
+                        deckName = deck.name,
+                        isBuilt = entries.any { it.isBuilt },
+                        linkedLocationName = deck.linkedLocationName,
+                        entries = entries.map { e ->
+                            val identity = identities[e.nameSlug]
+                            DeckMissingSummary.EntryInput(
+                                nameSlug = e.nameSlug,
+                                displayName = identity?.displayName ?: e.nameSlug,
+                                zone = DeckZone.fromString(e.zone) ?: DeckZone.main,
+                                quantity = e.quantity,
+                            )
+                        },
+                    )
+                }
+
+                val inventoryLines = allInventoryLines.mapNotNull { line ->
+                    val printing = printingByProduct[line.productId]
+                    if (printing == null) {
+                        android.util.Log.d("MissingSummary", "unresolved productId=${line.productId} loc=${line.locationName} qty=${line.quantity}")
+                        null
+                    } else DeckMissingSummary.InventoryLine(
+                        nameSlug = printing.nameSlug,
+                        locationName = line.locationName,
+                        quantity = line.quantity,
+                    )
+                }
+                // Log temporal breach specifically
+                val tbLines = inventoryLines.filter { it.nameSlug == "temporal-breach" }
+                android.util.Log.d("MissingSummary", "temporal-breach lines: ${tbLines.size}")
+                for (l in tbLines) {
+                    android.util.Log.d("MissingSummary", "  loc=${l.locationName} qty=${l.quantity}")
+                }
+
+                val summary = DeckMissingSummary.compute(
+                    decks = deckInputs,
+                    inventoryLines = inventoryLines,
+                    storageLocationNames = storageLocations,
+                    deckLocationNames = deckLocations,
+                )
+                android.util.Log.d("MissingSummary", "decks=${deckInputs.size}, inventory=${inventoryLines.size}, storage=${storageLocations.size}")
+                for (d in summary.decks) {
+                    android.util.Log.d("MissingSummary", "deck=${d.deckName} missing=${d.totalMissing}")
+                    for (c in d.missingCards) {
+                        android.util.Log.d("MissingSummary", "  card=${c.displayName} needed=${c.needed} available=${c.available} missing=${c.missing}")
+                    }
+                }
+                _deckListState.value = _deckListState.value.copy(missingSummary = summary, isLoadingMissingSummary = false)
+            } catch (e: Exception) {
+                _deckListState.value = _deckListState.value.copy(isLoadingMissingSummary = false)
+            }
+        }
+    }
+
     fun loadDeckDetail(deckId: String) {
         viewModelScope.launch {
             _deckDetailState.value = DeckDetailUiState(isLoading = true)
@@ -272,9 +344,12 @@ class DeckViewModel @Inject constructor(
             val storageLocations = locationPolicyDao.getStorageLocations().map { it.name.trim().lowercase() }.toSet()
             val deckLocations = locationPolicyDao.getByKind("deck").map { it.name.trim().lowercase() }.toSet()
 
-            // For each entry, compute availability
+            // For each entry, compute availability — track cards already claimed by earlier zones
             val linkedLoc = deck?.linkedLocationName
-            val display = entries.map { entry ->
+            val zoneOrder = listOf(DeckZone.legend, DeckZone.chosenChampion, DeckZone.main, DeckZone.sideboard, DeckZone.rune, DeckZone.battlefield)
+            val claimedBySlug = mutableMapOf<String, Int>()
+            val sortedEntries = entries.sortedBy { e -> zoneOrder.indexOf(DeckZone.fromString(e.zone) ?: DeckZone.main) }
+            val display = sortedEntries.map { entry ->
                 val identity = identities[entry.nameSlug]
                 val printings = allPrintings[entry.nameSlug] ?: emptyList()
                 val imageURL = printings.firstOrNull { !it.imageURL.isNullOrEmpty() }?.imageURL
@@ -287,12 +362,18 @@ class DeckViewModel @Inject constructor(
                 val availability = DeckAvailability.compute(
                     quantity = entry.quantity,
                     zone = zone,
+                    alreadyClaimed = claimedBySlug[entry.nameSlug] ?: 0,
                     lineLocations = lineLocs,
                     lineQuantities = lineQtys,
                     storageLocations = storageLocations,
                     deckLocations = deckLocations,
                     linkedLocation = linkedLoc,
                 )
+                // Track cards claimed by this entry for subsequent entries of the same card
+                if (zone != DeckZone.rune && zone != DeckZone.battlefield) {
+                    val claimed = minOf(availability.availableInStorage + availability.inDeckLocation, entry.quantity)
+                    claimedBySlug[entry.nameSlug] = (claimedBySlug[entry.nameSlug] ?: 0) + claimed
+                }
 
                 DeckEntryDisplay(
                     entryId = entry.id,
@@ -1404,8 +1485,11 @@ class DeckViewModel @Inject constructor(
         val storageLocations = locationPolicyDao.getStorageLocations().map { it.name.trim().lowercase() }.toSet()
         val deckLocations = locationPolicyDao.getByKind("deck").map { it.name.trim().lowercase() }.toSet()
         val linkedLoc = deckDao.getDeck(deckId)?.linkedLocationName
+        val zoneOrder = listOf(DeckZone.legend, DeckZone.chosenChampion, DeckZone.main, DeckZone.sideboard, DeckZone.rune, DeckZone.battlefield)
+        val claimedBySlug = mutableMapOf<String, Int>()
+        val sortedEntries = entries.sortedBy { e -> zoneOrder.indexOf(DeckZone.fromString(e.zone) ?: DeckZone.main) }
 
-        val display = entries.map { entry ->
+        val display = sortedEntries.map { entry ->
             val identity = identities[entry.nameSlug]
             val printings = allPrintings[entry.nameSlug] ?: emptyList()
             val imageURL = printings.firstOrNull { !it.imageURL.isNullOrEmpty() }?.imageURL
@@ -1415,12 +1499,17 @@ class DeckViewModel @Inject constructor(
             val availability = DeckAvailability.compute(
                 quantity = entry.quantity,
                 zone = zone,
+                alreadyClaimed = claimedBySlug[entry.nameSlug] ?: 0,
                 lineLocations = allLines.map { it.locationName },
                 lineQuantities = allLines.map { it.quantity },
                 storageLocations = storageLocations,
                 deckLocations = deckLocations,
                 linkedLocation = linkedLoc,
             )
+            if (zone != DeckZone.rune && zone != DeckZone.battlefield) {
+                val claimed = minOf(availability.availableInStorage + availability.inDeckLocation, entry.quantity)
+                claimedBySlug[entry.nameSlug] = (claimedBySlug[entry.nameSlug] ?: 0) + claimed
+            }
 
             DeckEntryDisplay(
                 entryId = entry.id,

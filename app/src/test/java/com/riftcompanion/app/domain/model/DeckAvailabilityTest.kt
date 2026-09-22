@@ -22,6 +22,7 @@ class DeckAvailabilityTest {
         val result = DeckAvailability.compute(
             quantity = 3,
             zone = DeckZone.main,
+                alreadyClaimed = 0,
             lineLocations = listOf("Vi deck", "Red box"),
             lineQuantities = listOf(2, 1),
             storageLocations = storage,
@@ -41,6 +42,7 @@ class DeckAvailabilityTest {
         val result = DeckAvailability.compute(
             quantity = 3,
             zone = DeckZone.main,
+                alreadyClaimed = 0,
             lineLocations = listOf("Vi deck"),
             lineQuantities = listOf(3),
             storageLocations = storage,
@@ -57,6 +59,7 @@ class DeckAvailabilityTest {
         val result = DeckAvailability.compute(
             quantity = 3,
             zone = DeckZone.main,
+                alreadyClaimed = 0,
             lineLocations = listOf("Azir deck"),
             lineQuantities = listOf(3),
             storageLocations = storage,
@@ -74,6 +77,7 @@ class DeckAvailabilityTest {
         val result = DeckAvailability.compute(
             quantity = 2,
             zone = DeckZone.main,
+                alreadyClaimed = 0,
             lineLocations = listOf("Red box"),
             lineQuantities = listOf(2),
             storageLocations = storage,
@@ -89,6 +93,7 @@ class DeckAvailabilityTest {
         val result = DeckAvailability.compute(
             quantity = 4,
             zone = DeckZone.main,
+                alreadyClaimed = 0,
             lineLocations = listOf("Red box", "Vi deck"),
             lineQuantities = listOf(1, 1),
             storageLocations = storage,
@@ -107,6 +112,7 @@ class DeckAvailabilityTest {
         val result = DeckAvailability.compute(
             quantity = 12,
             zone = DeckZone.rune,
+                alreadyClaimed = 0,
             lineLocations = emptyList(),
             lineQuantities = emptyList(),
             storageLocations = storage,
@@ -123,6 +129,7 @@ class DeckAvailabilityTest {
         val result = DeckAvailability.compute(
             quantity = 3,
             zone = DeckZone.battlefield,
+                alreadyClaimed = 0,
             lineLocations = emptyList(),
             lineQuantities = emptyList(),
             storageLocations = storage,
@@ -139,6 +146,7 @@ class DeckAvailabilityTest {
         val result = DeckAvailability.compute(
             quantity = 3,
             zone = DeckZone.main,
+                alreadyClaimed = 0,
             lineLocations = emptyList(),
             lineQuantities = emptyList(),
             storageLocations = storage,
@@ -155,6 +163,7 @@ class DeckAvailabilityTest {
         val result = DeckAvailability.compute(
             quantity = 2,
             zone = DeckZone.main,
+                alreadyClaimed = 0,
             lineLocations = listOf("Vi deck"),
             lineQuantities = listOf(2),
             storageLocations = storage,
@@ -164,5 +173,40 @@ class DeckAvailabilityTest {
         assertEquals(0, result.inOtherDecks)
         assertEquals(0, result.availableInStorage)
         assertEquals(2, result.inDeckLocation)
+    }
+
+    @Test
+    fun `same card in main and sideboard does not double-count available inventory`() {
+        // Deck has 2 Elder Dragons in main + 1 in sideboard = 3 total needed
+        // User has 1 Elder Dragon in storage, 0 at deck location
+        val mainResult = DeckAvailability.compute(
+            quantity = 2,
+            zone = DeckZone.main,
+            alreadyClaimed = 0,
+            lineLocations = listOf("Red box"),
+            lineQuantities = listOf(1),
+            storageLocations = storage,
+            deckLocations = decks,
+            linkedLocation = "Vi deck",
+        )
+        // Main deck: needs 2, has 1 available → 1 missing
+        assertEquals(1, mainResult.availableInStorage)
+        assertEquals(1, mainResult.missingCount)
+        assertTrue(mainResult.isMissing)
+
+        // Sideboard: needs 1, but the 1 in storage is already claimed by main → 1 missing
+        val sideboardResult = DeckAvailability.compute(
+            quantity = 1,
+            zone = DeckZone.sideboard,
+            alreadyClaimed = 1, // 1 already claimed by main deck
+            lineLocations = listOf("Red box"),
+            lineQuantities = listOf(1),
+            storageLocations = storage,
+            deckLocations = decks,
+            linkedLocation = "Vi deck",
+        )
+        assertEquals(0, sideboardResult.availableInStorage)
+        assertEquals(1, sideboardResult.missingCount)
+        assertTrue(sideboardResult.isMissing)
     }
 }

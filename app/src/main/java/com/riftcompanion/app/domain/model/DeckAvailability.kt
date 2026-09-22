@@ -31,6 +31,8 @@ object DeckAvailability {
     /**
      * @param quantity quantity of this card in the deck definition
      * @param zone the deck zone this card belongs to
+     * @param alreadyClaimed how many of this card's available inventory has already
+     *        been claimed by earlier entries of the same card in other zones
      * @param lineLocations location names of all inventory lines for this card
      * @param lineQuantities quantities of each inventory line (parallel to [lineLocations])
      * @param storageLocations names of storage-type locations
@@ -40,6 +42,7 @@ object DeckAvailability {
     fun compute(
         quantity: Int,
         zone: DeckZone,
+        alreadyClaimed: Int,
         lineLocations: List<String?>,
         lineQuantities: List<Int>,
         storageLocations: Set<String>,
@@ -75,12 +78,15 @@ object DeckAvailability {
         val total = lineQuantities.sum()
 
         val isRuneOrBattlefield = zone == DeckZone.rune || zone == DeckZone.battlefield
-        val availableTotal = if (isRuneOrBattlefield) quantity else inStorage + inDeckLocation
+        val rawAvailable = if (isRuneOrBattlefield) quantity else inStorage + inDeckLocation
+        val availableTotal = maxOf(0, rawAvailable - alreadyClaimed)
         val missing = if (isRuneOrBattlefield) 0 else maxOf(0, quantity - availableTotal)
 
+        val displayInStorage = if (isRuneOrBattlefield) quantity else maxOf(0, inStorage - alreadyClaimed)
+        val displayInDeckLocation = if (isRuneOrBattlefield) quantity else inDeckLocation
         return Result(
-            availableInStorage = if (isRuneOrBattlefield) quantity else inStorage,
-            inDeckLocation = if (isRuneOrBattlefield) quantity else inDeckLocation,
+            availableInStorage = displayInStorage,
+            inDeckLocation = displayInDeckLocation,
             inOtherDecks = if (isRuneOrBattlefield) 0 else inDecks,
             totalOwned = if (isRuneOrBattlefield) quantity else total,
             isMissing = missing > 0,

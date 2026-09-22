@@ -84,6 +84,8 @@ object DeckBuildPlanner {
 
         // Track how many cards at deck location have been "consumed" by entries
         val atDeckConsumed = mutableMapOf<String, Int>()
+        // Track how many cards from storage have been "consumed" by entries
+        val storageConsumed = mutableMapOf<String, Int>()
 
         // ── Phase 1: Process each deck entry (movements + missing only) ──
         for (entry in entries) {
@@ -105,6 +107,9 @@ object DeckBuildPlanner {
                         it.locationName.trim().lowercase() in storageLocations
                 }
                 .sortedBy { it.locationName }
+            val totalInStorage = storageLines.sumOf { it.quantity }
+            val storageAlreadyConsumed = storageConsumed[entry.nameSlug] ?: 0
+            val availableInStorage = maxOf(0, totalInStorage - storageAlreadyConsumed)
 
             if (isRuneOrBattlefield) {
                 // Runes/battlefields are created at the deck location, never missing
@@ -112,23 +117,27 @@ object DeckBuildPlanner {
             }
 
             // Compute shortfall that needs to be moved from storage
-            // Always count cards already at the deck location, even if deck state
-            // is "planned" (e.g. deck was built, edited, state reverted, but cards
-            // are still physically at the deck location).
             val shortfall = maxOf(0, needed - atDeck)
             var remaining = shortfall
+            var takenFromStorage = 0
             for (line in storageLines) {
                 if (remaining <= 0) break
-                val take = minOf(remaining, line.quantity)
-                movements.add(Movement(
-                    nameSlug = entry.nameSlug,
-                    displayName = entry.displayName,
-                    quantity = take,
-                    fromLocation = line.locationName,
-                    toLocation = deckLocationDisplayName,
-                ))
-                remaining -= take
+                // How many are left in this specific storage line after previous entries took some
+                val lineAvailable = maxOf(0, line.quantity - maxOf(0, storageAlreadyConsumed - storageLines.takeWhile { it.locationName != line.locationName }.sumOf { it.quantity }))
+                val take = minOf(remaining, lineAvailable)
+                if (take > 0) {
+                    movements.add(Movement(
+                        nameSlug = entry.nameSlug,
+                        displayName = entry.displayName,
+                        quantity = take,
+                        fromLocation = line.locationName,
+                        toLocation = deckLocationDisplayName,
+                    ))
+                    remaining -= take
+                    takenFromStorage += take
+                }
             }
+            storageConsumed[entry.nameSlug] = storageAlreadyConsumed + takenFromStorage
 
             // Compute missing
             if (remaining > 0) {
