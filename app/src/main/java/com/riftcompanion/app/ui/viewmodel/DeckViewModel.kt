@@ -61,6 +61,7 @@ data class DeckDetailUiState(
     val deck: DeckSummary? = null,
     val entries: List<DeckEntryDisplay> = emptyList(),
     val isLoading: Boolean = false,
+    val availableLocations: List<com.riftcompanion.app.domain.model.LocationPolicy> = emptyList(),
 )
 
 data class DeckEntryDisplay(
@@ -426,6 +427,23 @@ class DeckViewModel @Inject constructor(
                 allPrintings[e.nameSlug]?.firstOrNull { !it.imageURL.isNullOrEmpty() }?.imageURL
             }
 
+            // Load available locations for the linked location selector
+            val availableLocs = locationPolicyDao.getVisibleNonUnavailable().map { loc ->
+                com.riftcompanion.app.domain.model.LocationPolicy(
+                    name = loc.name,
+                    displayName = loc.displayName,
+                    color = loc.color,
+                    icon = loc.icon,
+                    kind = when (loc.kind) {
+                        "storage" -> com.riftcompanion.app.domain.model.LocationKind.Storage
+                        "deck" -> com.riftcompanion.app.domain.model.LocationKind.Deck
+                        else -> com.riftcompanion.app.domain.model.LocationKind.Unavailable
+                    },
+                    countsAsAvailable = loc.countsAsAvailable,
+                    hidden = loc.hidden,
+                )
+            }
+
             _deckDetailState.value = DeckDetailUiState(
                 deck = deck?.let {
                     DeckSummary(
@@ -447,6 +465,7 @@ class DeckViewModel @Inject constructor(
                     items.sortedBy { it.displayName }
                 },
                 isLoading = false,
+                availableLocations = availableLocs,
             )
         }
     }
@@ -578,13 +597,50 @@ class DeckViewModel @Inject constructor(
      * Save both the deck name and its card entries.
      * Called when the user taps the save (check) button in edit mode.
      */
-    fun saveDeck(deckId: String, newName: String, onDone: () -> Unit = {}) {
+    fun saveDeck(deckId: String, newName: String, newLinkedLocation: String? = null, onDone: () -> Unit = {}) {
         viewModelScope.launch {
             val deck = deckDao.getDeck(deckId) ?: return@launch
             val trimmed = newName.trim()
             if (trimmed.isNotBlank()) {
+                val updatedLinkedLocation = if (newLinkedLocation != null) {
+                    val trimmedLoc = newLinkedLocation.trim()
+                    if (trimmedLoc.isBlank()) null else trimmedLoc
+                } else {
+                    deck.linkedLocationName
+                }
+                
+                // If changing linked location, update location policies
+                if (updatedLinkedLocation != deck.linkedLocationName) {
+                    // Unlink old location
+                    if (deck.linkedLocationName != null) {
+                        val oldPolicy = locationPolicyDao.getByName(deck.linkedLocationName.lowercase().trim())
+                        if (oldPolicy != null && oldPolicy.linkedDeckId == deckId) {
+                            locationPolicyDao.upsert(oldPolicy.copy(linkedDeckId = null))
+                        }
+                    }
+                    // Link new location
+                    if (updatedLinkedLocation != null) {
+                        val newPolicy = locationPolicyDao.getByName(updatedLinkedLocation.lowercase().trim())
+                        if (newPolicy != null) {
+                            locationPolicyDao.upsert(newPolicy.copy(linkedDeckId = deckId))
+                        } else {
+                            locationPolicyDao.upsert(LocationPolicyEntity(
+                                name = updatedLinkedLocation,
+                                displayName = updatedLinkedLocation,
+                                color = null,
+                                icon = null,
+                                kind = "deck",
+                                countsAsAvailable = false,
+                                hidden = false,
+                                linkedDeckId = deckId,
+                            ))
+                        }
+                    }
+                }
+                
                 deckDao.insertDeck(deck.copy(
                     name = trimmed,
+                    linkedLocationName = updatedLinkedLocation,
                     updatedAt = System.currentTimeMillis(),
                 ))
             }

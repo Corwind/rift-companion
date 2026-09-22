@@ -40,7 +40,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Unarchive
@@ -51,6 +53,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -112,6 +115,7 @@ fun DeckDetailScreen(
     LaunchedEffect(deckId) { viewModel.loadDeckDetail(deckId) }
 
     var showDisassembleDialog by remember { mutableStateOf(false) }
+    var pendingLinkedLocation by remember { mutableStateOf<String?>(null) }
     var gridMode by remember { mutableStateOf(false) }
     var showAddCardSheet by remember { mutableStateOf(false) }
     var isEditing by remember { mutableStateOf(false) }
@@ -178,7 +182,7 @@ fun DeckDetailScreen(
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = {
-                    viewModel.saveDeck(deckId, editName) {
+                    viewModel.saveDeck(deckId, editName, pendingLinkedLocation) {
                         isEditing = false
                     }
                 }) {
@@ -281,6 +285,62 @@ fun DeckDetailScreen(
                     Spacer(Modifier.width(8.dp))
                     Text("Editing", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 }
+            }
+
+            // Linked location selector — visible in edit mode
+            if (isEditing) {
+                val deck = detailState.deck
+                var showLocationMenu by remember { mutableStateOf(false) }
+                var selectedLocation by remember(deck?.linkedLocationName) { mutableStateOf(deck?.linkedLocationName) }
+                
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Location", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(8.dp))
+                    Box {
+                        OutlinedButton(
+                            onClick = { showLocationMenu = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = selectedLocation ?: "No location",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Icon(Icons.Default.MoreVert, contentDescription = null, modifier = Modifier.size(16.dp))
+                        }
+                        DropdownMenu(
+                            expanded = showLocationMenu,
+                            onDismissRequest = { showLocationMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("No location") },
+                                onClick = {
+                                    selectedLocation = null
+                                    showLocationMenu = false
+                                },
+                            )
+                            HorizontalDivider()
+                            detailState.availableLocations.forEach { loc ->
+                                DropdownMenuItem(
+                                    text = { Text(loc.displayName) },
+                                    onClick = {
+                                        selectedLocation = loc.name
+                                        showLocationMenu = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+                // Store the selected location for the save button
+                pendingLinkedLocation = selectedLocation
             }
 
             // Add Card button — prominent, always visible in edit mode
