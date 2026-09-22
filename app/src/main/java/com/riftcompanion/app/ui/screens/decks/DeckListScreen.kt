@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -65,6 +66,7 @@ fun DeckListScreen(
     onDeckClick: (String) -> Unit,
     onImportClick: () -> Unit,
     onCreateFromLocation: () -> Unit,
+    onMissingSummaryClick: () -> Unit,
     viewModel: DeckViewModel = hiltViewModel(),
 ) {
     val deckListState by viewModel.deckListState.collectAsStateWithLifecycle()
@@ -101,6 +103,9 @@ fun DeckListScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
+                IconButton(onClick = onMissingSummaryClick) {
+                    Icon(Icons.Default.ShoppingCart, contentDescription = "Missing cards summary", tint = MaterialTheme.colorScheme.onSurface)
+                }
                 Box {
                     IconButton(onClick = { showMenu = true }) {
                         Icon(Icons.Default.Add, contentDescription = "Add deck", tint = MaterialTheme.colorScheme.onSurface)

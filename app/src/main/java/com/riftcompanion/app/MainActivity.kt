@@ -66,6 +66,7 @@ import com.riftcompanion.app.ui.screens.rules.RulesSearchScreen
 import com.riftcompanion.app.ui.screens.decks.DeckFromLocationScreen
 import com.riftcompanion.app.ui.screens.decks.DeckImportScreen
 import com.riftcompanion.app.ui.screens.decks.DeckListScreen
+import com.riftcompanion.app.ui.screens.decks.DeckMissingSummaryScreen
 import com.riftcompanion.app.ui.screens.inventory.InventoryScreen
 import com.riftcompanion.app.ui.screens.locations.LocationsScreen
 import com.riftcompanion.app.ui.screens.lock.LockScreen
@@ -291,6 +292,14 @@ private fun AppNavigation(settingsViewModel: SettingsViewModel) {
                             onCreateFromLocation = {
                                 navController.navigate("deckFromLocation")
                             },
+                            onMissingSummaryClick = {
+                                navController.navigate("deckMissingSummary")
+                            },
+                        )
+                    }
+                    composable("deckMissingSummary") {
+                        DeckMissingSummaryScreen(
+                            onBack = { navController.popBackStack() },
                         )
                     }
                     composable("deckImport") {
