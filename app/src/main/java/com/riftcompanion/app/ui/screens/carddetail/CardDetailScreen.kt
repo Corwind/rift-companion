@@ -85,6 +85,7 @@ fun CardDetailScreen(
     LaunchedEffect(cardNameSlug) { viewModel.loadCard(cardNameSlug, isFromInventory) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showDiscardDialog by remember { mutableStateOf(false) }
+    var showZoomDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier.gradientBackground(),
@@ -123,7 +124,7 @@ fun CardDetailScreen(
                     CardArtwork(
                         imageURL = card.imageURL,
                         name = identity.displayName,
-                        modifier = Modifier.width(160.dp).aspectRatio(5f / 7f),
+                        modifier = Modifier.width(160.dp).aspectRatio(5f / 7f).clickable { showZoomDialog = true },
                         cornerRadius = 14,
                         isBanned = isBanned,
                     )
@@ -321,6 +322,13 @@ fun CardDetailScreen(
             dismissButton = {
                 TextButton(onClick = { showDiscardDialog = false }) { Text("Keep Editing") }
             },
+        )
+    }
+
+    if (showZoomDialog) {
+        com.riftcompanion.app.ui.components.ZoomableImageDialog(
+            imageURL = uiState.card?.imageURL,
+            onDismiss = { showZoomDialog = false },
         )
     }
 }
