@@ -94,7 +94,13 @@ class PiltoverArchiveService @Inject constructor(
             val prefix = expansionToPrefix[printing.expansionSlug]
             val printNumber = printing.printNumber
             if (prefix != null && !printNumber.isNullOrBlank()) {
-                val variantNumber = "$prefix-$printNumber"
+                // CN uses 's' suffix for signed cards (e.g. 299s), PA uses '*' (e.g. 299*)
+                val paPrintNumber = if (printNumber.endsWith("s") && printNumber.length > 1 && printNumber[printNumber.length - 2].isDigit()) {
+                    printNumber.dropLast(1) + "*"
+                } else {
+                    printNumber
+                }
+                val variantNumber = "$prefix-$paPrintNumber"
                 val paIds = paVariantByLower[variantNumber.lowercase()]
                 if (paIds != null) {
                     productToPaIds[printing.productID] = paIds
