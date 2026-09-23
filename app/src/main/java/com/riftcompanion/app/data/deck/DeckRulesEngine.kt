@@ -86,13 +86,17 @@ object DeckRulesEngine {
             .groupBy { it.nameSlug }
             .mapValues { (_, group) -> group.sumOf { maxOf(0, it.quantity) } }
         for ((slug, quantity) in quantitiesByName) {
-            if (slug !in unlimitedCards && quantity > ruleset.maximumCopiesByName) {
-                val name = identities[slug]?.displayName ?: slug
-                issues.add(DeckValidationIssue(
-                    ValidationSeverity.error, "copy_limit",
-                    "$name has $quantity copies; the limit is ${ruleset.maximumCopiesByName} across the main deck and sideboard.",
-                    listOf(slug),
-                ))
+            if (slug !in unlimitedCards) {
+                val cardMaxCopies = identities[slug]?.maxCopies
+                val effectiveLimit = cardMaxCopies ?: ruleset.maximumCopiesByName
+                if (quantity > effectiveLimit) {
+                    val name = identities[slug]?.displayName ?: slug
+                    issues.add(DeckValidationIssue(
+                        ValidationSeverity.error, "copy_limit",
+                        "$name has $quantity copies; the limit is $effectiveLimit across the main deck and sideboard.",
+                        listOf(slug),
+                    ))
+                }
             }
         }
 
