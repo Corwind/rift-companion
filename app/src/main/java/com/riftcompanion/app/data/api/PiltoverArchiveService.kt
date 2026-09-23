@@ -93,6 +93,8 @@ class PiltoverArchiveService @Inject constructor(
         var unmatchedCount = 0
         // Build variantId → printingSlug map for exact deck matching (ALL printings, not just first per slug)
         val variantIdToPrintingSlug = mutableMapOf<String, String>()
+        // Build variantNumber → printingSlug map for legend matching via PaDeckLegend.variantNumber
+        val variantNumberToPrintingSlug = mutableMapOf<String, String>()
         for (printing in printings) {
             val prefix = expansionToPrefix[printing.expansionSlug]
             val printNumber = printing.printNumber
@@ -107,9 +109,10 @@ class PiltoverArchiveService @Inject constructor(
                 val paIds = paVariantByLower[variantNumber.lowercase()]
                 if (paIds != null) {
                     productToPaIds[printing.productID] = paIds
-                    // Map this exact variantId to this exact printing's slug
+                    // Map ONLY variantId to printing slug (cardId is shared across printings)
                     variantIdToPrintingSlug[paIds.second] = printing.nameSlug
-                    variantIdToPrintingSlug[paIds.first] = printing.nameSlug
+                    // Map variantNumber to printing slug for legend matching
+                    variantNumberToPrintingSlug[variantNumber.lowercase()] = printing.nameSlug
                 } else {
                     unmatchedCount++
                 }
@@ -233,9 +236,6 @@ class PiltoverArchiveService @Inject constructor(
             // Use /decks/my to get all our decks (including private/draft)
             val paDecks = piltoverArchiveClient.getMyDecks().getOrNull() ?: emptyList()
 
-            // Reverse map: variantId → printingSlug (exact printing match, not just first per slug)
-            val paIdToSlug = variantIdToPrintingSlug
-
             for (paDeck in paDecks) {
                 if (paDeck.id in knownPaIds) continue
 
@@ -258,25 +258,30 @@ class PiltoverArchiveService @Inject constructor(
                 // Create entries
                 val entries = mutableListOf<DeckEntryEntity>()
                 
-                // Add legend entry
+                // Add legend entry — use variantNumber for exact match, fall back to variantId
+                val legendVariantNumber = detail.legend?.variantNumber
                 val legendId = detail.legend?.id
-                if (legendId != null) {
-                    val legendSlug = paIdToSlug[legendId]
-                    if (legendSlug != null) {
-                        entries.add(DeckEntryEntity(
-                            deckId = deckId,
-                            zone = DeckZone.legend.name,
-                            nameSlug = legendSlug,
-                            quantity = 1,
-                        ))
-                    } else {
-                    }
+                val legendSlug = if (legendVariantNumber != null) {
+                    variantNumberToPrintingSlug[legendVariantNumber.lowercase()]
+                } else if (legendId != null) {
+                    variantIdToPrintingSlug[legendId]
+                } else {
+                    null
+                }
+                if (legendSlug != null) {
+                    entries.add(DeckEntryEntity(
+                        deckId = deckId,
+                        zone = DeckZone.legend.name,
+                        nameSlug = legendSlug,
+                        quantity = 1,
+                    ))
                 }
                 
                 fun addEntries(zone: DeckZone, cards: List<PiltoverArchiveClient.PaDeckCardEntry>) {
                     for (card in cards) {
-                        // Use variantId for exact printing match, fall back to cardId
-                        val nameSlug = (card.variantId?.let { paIdToSlug[it] } ?: paIdToSlug[card.cardId]) ?: continue
+                        // Use variantId only for exact printing match — do NOT fall back to cardId
+                        // (cardId is shared across all printings of a card)
+                        val nameSlug = card.variantId?.let { variantIdToPrintingSlug[it] } ?: continue
                         entries.add(DeckEntryEntity(
                             deckId = deckId,
                             zone = zone.name,
