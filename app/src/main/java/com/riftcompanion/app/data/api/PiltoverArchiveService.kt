@@ -103,6 +103,9 @@ class PiltoverArchiveService @Inject constructor(
         // Build variantNumber → printingSlug map for legend matching via PaDeckLegend.variantNumber
         val variantNumberToPrintingSlug = mutableMapOf<String, String>()
         
+        // Build variantId → productId reverse map for deck pull (to set preferredProductId)
+        val variantIdToProductId = mutableMapOf<String, Long>()
+        
         // Group CN printings by variantNumber to match against PA variants
         val cnPrintingsByVariantNumber = mutableMapOf<String, MutableList<com.riftcompanion.app.data.db.CardPrintingEntity>>()
         for (printing in printings) {
@@ -141,6 +144,7 @@ class PiltoverArchiveService @Inject constructor(
                 val paIds = bestPaMatch.cardId to bestPaMatch.variantId
                 productToPaIds[cnPrinting.productID] = paIds
                 variantIdToPrintingSlug[bestPaMatch.variantId] = cnPrinting.nameSlug
+                variantIdToProductId[bestPaMatch.variantId] = cnPrinting.productID
             }
             
             // Also map ALL remaining PA variantIds to the closest CN printing slug
@@ -152,6 +156,7 @@ class PiltoverArchiveService @Inject constructor(
                     val bestCn = cnPrintings.firstOrNull { (it.expansionSlug in promoExpansions) == isPaPromo }
                         ?: cnPrintings.first()
                     variantIdToPrintingSlug[paMatch.variantId] = bestCn.nameSlug
+                    variantIdToProductId[paMatch.variantId] = bestCn.productID
                 }
             }
             
@@ -310,11 +315,13 @@ class PiltoverArchiveService @Inject constructor(
                     null
                 }
                 if (legendSlug != null) {
+                    val legendProductId = legendId?.let { variantIdToProductId[it] }
                     entries.add(DeckEntryEntity(
                         deckId = deckId,
                         zone = DeckZone.legend.name,
                         nameSlug = legendSlug,
                         quantity = 1,
+                        preferredProductId = legendProductId,
                     ))
                 }
                 
@@ -323,11 +330,13 @@ class PiltoverArchiveService @Inject constructor(
                         // Use variantId only for exact printing match — do NOT fall back to cardId
                         // (cardId is shared across all printings of a card)
                         val nameSlug = card.variantId?.let { variantIdToPrintingSlug[it] } ?: continue
+                        val productId = card.variantId?.let { variantIdToProductId[it] }
                         entries.add(DeckEntryEntity(
                             deckId = deckId,
                             zone = zone.name,
                             nameSlug = nameSlug,
                             quantity = card.quantity ?: 1,
+                            preferredProductId = productId,
                         ))
                     }
                 }
