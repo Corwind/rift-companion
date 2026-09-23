@@ -91,6 +91,8 @@ class PiltoverArchiveService @Inject constructor(
         // Map productId → (cardId, variantId) for exact printing match
         val productToPaIds = mutableMapOf<Long, Pair<String, String>>()
         var unmatchedCount = 0
+        // Build variantId → printingSlug map for exact deck matching (ALL printings, not just first per slug)
+        val variantIdToPrintingSlug = mutableMapOf<String, String>()
         for (printing in printings) {
             val prefix = expansionToPrefix[printing.expansionSlug]
             val printNumber = printing.printNumber
@@ -105,6 +107,9 @@ class PiltoverArchiveService @Inject constructor(
                 val paIds = paVariantByLower[variantNumber.lowercase()]
                 if (paIds != null) {
                     productToPaIds[printing.productID] = paIds
+                    // Map this exact variantId to this exact printing's slug
+                    variantIdToPrintingSlug[paIds.second] = printing.nameSlug
+                    variantIdToPrintingSlug[paIds.first] = printing.nameSlug
                 } else {
                     unmatchedCount++
                 }
@@ -123,9 +128,16 @@ class PiltoverArchiveService @Inject constructor(
         // 2d. Enrich local card identities with PA data (power, mightBonus, maxCopies, banEffectiveDate)
         var enrichedCount = 0
         for (identity in identities) {
-            // Try exact name match, then comma substitution
-            val paCardInfo = paCardInfoMap[identity.displayName]
-                ?: paCardInfoMap[identity.displayName.replace(" - ", ", ")]
+            // Strip suffixes and try exact match, then comma substitution
+            val baseName = identity.displayName
+                .removeSuffix(" (alt)")
+                .removeSuffix(" (Signed)")
+                .removeSuffix(" (DE)")
+                .removeSuffix(" (NX)")
+                .removeSuffix(" (ZN)")
+                .removeSuffix(" (Worlds 2025)")
+            val paCardInfo = paCardInfoMap[baseName]
+                ?: paCardInfoMap[baseName.replace(" - ", ", ")]
             if (paCardInfo != null) {
                 cardIdentityDao.updatePaFields(
                     nameSlug = identity.nameSlug,
@@ -204,7 +216,7 @@ class PiltoverArchiveService @Inject constructor(
             val decks = deckDao.getAllDecks().first()
             for (deck in decks) {
                 val entries = deckDao.getEntriesForDeck(deck.id)
-                val paDeck = buildPaDeck(deck.name, entries, slugToPaIds)
+                val paDeck = buildPaDeck(deck.name, entries, slugToPaIds, productToPaIds)
                 if (deck.piltoverArchiveId != null) {
                     val updated = piltoverArchiveClient.updateDeckSafe(deck.piltoverArchiveId, paDeck).getOrNull()
                 } else {
@@ -226,12 +238,8 @@ class PiltoverArchiveService @Inject constructor(
             // Use /decks/my to get all our decks (including private/draft)
             val paDecks = piltoverArchiveClient.getMyDecks().getOrNull() ?: emptyList()
 
-            // Reverse map: variantId → nameSlug
-            val paIdToSlug = mutableMapOf<String, String>()
-            for ((slug, paIds) in slugToPaIds) {
-                paIdToSlug[paIds.second] = slug
-                paIdToSlug[paIds.first] = slug
-            }
+            // Reverse map: variantId → printingSlug (exact printing match, not just first per slug)
+            val paIdToSlug = variantIdToPrintingSlug
 
             for (paDeck in paDecks) {
                 if (paDeck.id in knownPaIds) continue
@@ -272,7 +280,8 @@ class PiltoverArchiveService @Inject constructor(
                 
                 fun addEntries(zone: DeckZone, cards: List<PiltoverArchiveClient.PaDeckCardEntry>) {
                     for (card in cards) {
-                        val nameSlug = paIdToSlug[card.cardId] ?: continue
+                        // Use variantId for exact printing match, fall back to cardId
+                        val nameSlug = (card.variantId?.let { paIdToSlug[it] } ?: paIdToSlug[card.cardId]) ?: continue
                         entries.add(DeckEntryEntity(
                             deckId = deckId,
                             zone = zone.name,
@@ -308,6 +317,7 @@ class PiltoverArchiveService @Inject constructor(
         name: String,
         entries: List<DeckEntryEntity>,
         slugToPaIds: Map<String, Pair<String, String>>,
+        productToPaIds: Map<Long, Pair<String, String>>,
     ): PiltoverArchiveClient.DeckWrite {
         val champions = mutableListOf<PiltoverArchiveClient.PaDeckWriteEntry>()
         val battlefields = mutableListOf<PiltoverArchiveClient.PaDeckWriteEntry>()
@@ -317,7 +327,12 @@ class PiltoverArchiveService @Inject constructor(
         var legendId: String? = null
 
         for (entry in entries) {
-            val paIds = slugToPaIds[entry.nameSlug] ?: continue
+            // Use preferredProductId for exact printing match if available, fall back to slug
+            val paIds = if (entry.preferredProductId != null) {
+                productToPaIds[entry.preferredProductId] ?: slugToPaIds[entry.nameSlug]
+            } else {
+                slugToPaIds[entry.nameSlug]
+            } ?: continue
             val paEntry = PiltoverArchiveClient.PaDeckWriteEntry(
                 cardId = paIds.first,
                 variantId = paIds.second,
