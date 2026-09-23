@@ -223,6 +223,7 @@ class DeckViewModel @Inject constructor(
                             displayName = entity.displayName,
                             domains = entity.domainsCsv.split(",").filter { it.isNotBlank() },
                             tags = entity.tagsCsv.split(",").filter { it.isNotBlank() },
+                            maxCopies = entity.maxCopies,
                         )
                     }
                     val issues = DeckRulesEngine.validate(entryData, identityInfos)
@@ -418,6 +419,7 @@ class DeckViewModel @Inject constructor(
                     tags = entity.tagsCsv.split(",").filter { it.isNotBlank() },
                     cardType = entity.cardType,
                     superType = entity.superType,
+                    maxCopies = entity.maxCopies,
                 )
             }
             val issues = DeckRulesEngine.validate(entryData, identityInfos)
@@ -1615,6 +1617,7 @@ class DeckViewModel @Inject constructor(
                 tags = entity.tagsCsv.split(",").filter { it.isNotBlank() },
                 cardType = entity.cardType,
                 superType = entity.superType,
+                maxCopies = entity.maxCopies,
             )
         }
         val issues = DeckRulesEngine.validate(entryData, identityInfos)

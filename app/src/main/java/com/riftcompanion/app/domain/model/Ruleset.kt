@@ -57,4 +57,5 @@ data class CardIdentityInfo(
     val superType: String? = null,
     val expansionSlug: String? = null,
     val attributes: Map<String, String?> = emptyMap(),
+    val maxCopies: Int? = null,
 )
