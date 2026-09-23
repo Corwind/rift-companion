@@ -129,8 +129,11 @@ class PiltoverArchiveService @Inject constructor(
                 continue
             }
             
+            // Sort CN printings: standard first, then promo — so standard wins when PA has only one variant
+            val sortedCnPrintings = cnPrintings.sortedBy { if (it.expansionSlug in promoExpansions) 1 else 0 }
+            
             // Match each CN printing to the best PA variant
-            for (cnPrinting in cnPrintings) {
+            for (cnPrinting in sortedCnPrintings) {
                 val isCnPromo = cnPrinting.expansionSlug in promoExpansions
                 val bestPaMatch = if (paMatches.size == 1) {
                     paMatches.first()
@@ -143,8 +146,11 @@ class PiltoverArchiveService @Inject constructor(
                 }
                 val paIds = bestPaMatch.cardId to bestPaMatch.variantId
                 productToPaIds[cnPrinting.productID] = paIds
-                variantIdToPrintingSlug[bestPaMatch.variantId] = cnPrinting.nameSlug
-                variantIdToProductId[bestPaMatch.variantId] = cnPrinting.productID
+                // Don't overwrite: first (standard) CN printing wins for each PA variantId
+                if (bestPaMatch.variantId !in variantIdToPrintingSlug) {
+                    variantIdToPrintingSlug[bestPaMatch.variantId] = cnPrinting.nameSlug
+                    variantIdToProductId[bestPaMatch.variantId] = cnPrinting.productID
+                }
             }
             
             // Also map ALL remaining PA variantIds to the closest CN printing slug
@@ -153,7 +159,7 @@ class PiltoverArchiveService @Inject constructor(
                 if (paMatch.variantId !in variantIdToPrintingSlug) {
                     // Pick the CN printing that best matches this PA variant type
                     val isPaPromo = paMatch.variantType != null && paMatch.variantType != "Standard"
-                    val bestCn = cnPrintings.firstOrNull { (it.expansionSlug in promoExpansions) == isPaPromo }
+                    val bestCn = sortedCnPrintings.firstOrNull { (it.expansionSlug in promoExpansions) == isPaPromo }
                         ?: cnPrintings.first()
                     variantIdToPrintingSlug[paMatch.variantId] = bestCn.nameSlug
                     variantIdToProductId[paMatch.variantId] = bestCn.productID
