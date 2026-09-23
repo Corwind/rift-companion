@@ -211,7 +211,12 @@ fun CardDetailScreen(
                         }
                         // Might is a strength stat for units only
                         if (isUnit) {
-                            identity.might?.let { StatCard("Might", it.toString(), Icons.Default.FitnessCenter) }
+                            identity.might?.let { mightVal ->
+                                val mightDisplay = identity.mightBonus?.let { bonus ->
+                                    if (bonus > 0) "$mightVal (+$bonus)" else mightVal.toString()
+                                } ?: mightVal.toString()
+                                StatCard("Might", mightDisplay, Icons.Default.FitnessCenter)
+                            }
                         }
                     }
                     Spacer(Modifier.height(20.dp))
