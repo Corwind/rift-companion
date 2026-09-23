@@ -355,7 +355,10 @@ class DeckViewModel @Inject constructor(
             val display = sortedEntries.map { entry ->
                 val identity = identities[entry.nameSlug]
                 val printings = allPrintings[entry.nameSlug] ?: emptyList()
-                val imageURL = printings.firstOrNull { !it.imageURL.isNullOrEmpty() }?.imageURL
+                // Use preferredProductId to pick the exact printing's image/info
+                val preferredPrinting = entry.preferredProductId?.let { pid -> printings.firstOrNull { it.productID == pid } }
+                val imageURL = preferredPrinting?.imageURL
+                    ?: printings.firstOrNull { !it.imageURL.isNullOrEmpty() }?.imageURL
                     ?: printings.firstOrNull()?.imageURL
                 // Find all inventory lines for this card
                 val allLines = inventoryLineDao.getLinesByCardSlug(entry.nameSlug)
@@ -387,8 +390,8 @@ class DeckViewModel @Inject constructor(
                     preferredImageURL = imageURL,
                     cardType = identity?.cardType,
                     superType = identity?.superType,
-                    expansion = printings.firstOrNull()?.expansionSlug,
-                    rarity = printings.firstOrNull()?.rarity,
+                    expansion = preferredPrinting?.expansionSlug ?: printings.firstOrNull()?.expansionSlug,
+                    rarity = preferredPrinting?.rarity ?: printings.firstOrNull()?.rarity,
                     domains = identity?.domainsCsv?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
                     energyCost = identity?.energyCost,
                     might = identity?.might,
