@@ -791,6 +791,21 @@ private fun DeckCardRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // Stats line: energy / power / might
+                val statsText = buildString {
+                    val parts = mutableListOf<String>()
+                    if (entry.energyCost != null && entry.energyCost > 0) parts.add("${entry.energyCost} energy")
+                    if (entry.power != null && entry.power > 0) parts.add("${entry.power} power")
+                    if (entry.might != null && entry.might > 0) parts.add("${entry.might} might")
+                    if (parts.isNotEmpty()) append(parts.joinToString(" · "))
+                }
+                if (statsText.isNotBlank()) {
+                    Text(
+                        statsText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 // Availability: in deck / in storage / missing
                 val availText = buildString {
                     val parts = mutableListOf<String>()
