@@ -49,6 +49,9 @@ object EntityConverter {
             energyCost = entity.energyCost,
             might = entity.might,
             power = entity.power,
+            mightBonus = entity.mightBonus,
+            maxCopies = entity.maxCopies,
+            banEffectiveDate = entity.banEffectiveDate,
             attributes = attributes,
         )
     }

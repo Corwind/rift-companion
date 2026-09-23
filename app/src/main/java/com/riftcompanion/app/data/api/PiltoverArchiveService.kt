@@ -126,7 +126,6 @@ class PiltoverArchiveService @Inject constructor(
         }
 
         // 2d. Enrich local card identities with PA data (power, mightBonus, maxCopies, banEffectiveDate)
-        var enrichedCount = 0
         for (identity in identities) {
             // Strip suffixes and try exact match, then comma substitution
             val baseName = identity.displayName
@@ -146,11 +145,7 @@ class PiltoverArchiveService @Inject constructor(
                     maxCopies = paCardInfo.maxCopies,
                     banEffectiveDate = paCardInfo.banEffectiveDate,
                 )
-                enrichedCount++
             }
-        }
-        if (enrichedCount > 0) {
-            android.util.Log.d("PiltoverSync", "Step 2d: enriched $enrichedCount card identities with PA data")
         }
 
         // 3. Sync collection: read local inventory → export PA → PATCH/POST/DELETE

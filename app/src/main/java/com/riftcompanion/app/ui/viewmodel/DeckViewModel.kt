@@ -78,6 +78,7 @@ data class DeckEntryDisplay(
     val domains: List<String> = emptyList(),
     val energyCost: Int? = null,
     val might: Int? = null,
+    val power: Int? = null,
     val priceEur: Double? = null,
     val priceUsd: Double? = null,
     // Availability info for deck building
@@ -390,6 +391,7 @@ class DeckViewModel @Inject constructor(
                     domains = identity?.domainsCsv?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
                     energyCost = identity?.energyCost,
                     might = identity?.might,
+                    power = identity?.power,
                     priceEur = printings.firstNotNullOfOrNull { cardPriceDao.getByProductId(it.productID) }?.cardmarketMarketValue,
                     priceUsd = printings.firstNotNullOfOrNull { cardPriceDao.getByProductId(it.productID) }?.tcgplayerMarketValue,
                     availableInStorage = availability.availableInStorage,
@@ -1581,6 +1583,7 @@ class DeckViewModel @Inject constructor(
                 domains = identity?.domainsCsv?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
                 energyCost = identity?.energyCost,
                 might = identity?.might,
+                power = identity?.power,
                 priceEur = printings.firstNotNullOfOrNull { cardPriceDao.getByProductId(it.productID) }?.cardmarketMarketValue,
                 priceUsd = printings.firstNotNullOfOrNull { cardPriceDao.getByProductId(it.productID) }?.tcgplayerMarketValue,
                 availableInStorage = availability.availableInStorage,

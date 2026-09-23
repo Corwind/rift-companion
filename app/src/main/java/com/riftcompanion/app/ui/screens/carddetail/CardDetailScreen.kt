@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Inventory2
@@ -118,9 +119,9 @@ fun CardDetailScreen(
                     .verticalScroll(scrollState)
                     .padding(16.dp),
             ) {
+                val isBanned = viewModel.isCardBanned(identity.displayName)
                 // Hero header
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    val isBanned = viewModel.isCardBanned(identity.displayName)
                     CardArtwork(
                         imageURL = card.imageURL,
                         name = identity.displayName,
@@ -174,9 +175,27 @@ fun CardDetailScreen(
                     }
                 }
 
-                Spacer(Modifier.height(20.dp))
+                // Banned warning with effective date
+                if (isBanned) {
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.1f))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Default.Error, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = identity.banEffectiveDate?.let { "Banned (effective $it)" } ?: "Banned",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
 
-                // Stats
+                Spacer(Modifier.height(20.dp))
                 val isLegend = identity.cardType?.equals("Legend", ignoreCase = true) == true
                 val isUnit = identity.cardType?.equals("Unit", ignoreCase = true) == true
                 val isSpell = identity.cardType?.equals("Spell", ignoreCase = true) == true
@@ -222,6 +241,8 @@ fun CardDetailScreen(
                     MetadataRow("Finish", card.finish)
                     MetadataRow("Language", card.language?.uppercase())
                     card.printingCount?.let { MetadataRow("Known printings", it.toString()) }
+                    identity.maxCopies?.let { MetadataRow("Max copies", it.toString()) }
+                    identity.banEffectiveDate?.let { MetadataRow("Ban effective", it) }
                 }
 
                 // Price

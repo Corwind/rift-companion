@@ -14,6 +14,9 @@ data class CardIdentity(
     val energyCost: Int? = null,
     val might: Int? = null,
     val power: Int? = null,
+    val mightBonus: Int? = null,
+    val maxCopies: Int? = null,
+    val banEffectiveDate: String? = null,
     val attributes: Map<String, JsonValue> = emptyMap(),
 ) {
     val id: String get() = nameSlug
