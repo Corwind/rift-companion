@@ -195,13 +195,19 @@ class PiltoverArchiveClient @Inject constructor(
         val hasPrevious: Boolean = false,
     )
 
+    data class PaVariantMatch(
+        val cardId: String,
+        val variantId: String,
+        val variantType: String? = null,
+    )
+
     /** Fetch all card variants. Returns Pair(variantNumberMap, cardInfoMap) where:
-     *  - variantNumberMap: variantNumber → Pair(cardId, variantId)
+     *  - variantNumberMap: variantNumber (lowercase) → List of PaVariantMatch (one per PA variant)
      *  - cardInfoMap: cardName → PaCardInfo (for enrichment)
      */
-    suspend fun fetchAllCards(): Result<Pair<Map<String, Pair<String, String>>, Map<String, PaCardInfo>>> = withContext(Dispatchers.IO) {
+    suspend fun fetchAllCards(): Result<Pair<Map<String, List<PaVariantMatch>>, Map<String, PaCardInfo>>> = withContext(Dispatchers.IO) {
         runCatching {
-            val result = mutableMapOf<String, Pair<String, String>>()
+            val result = mutableMapOf<String, MutableList<PaVariantMatch>>()
             val cardInfoMap = mutableMapOf<String, PaCardInfo>()
             var page = 1
             val limit = 100
@@ -222,7 +228,7 @@ class PiltoverArchiveClient @Inject constructor(
                     val variantId = variant.id
                     val variantNumber = variant.variantNumber
                     if (!variantNumber.isNullOrBlank()) {
-                        result[variantNumber] = cardId to variantId
+                        result.getOrPut(variantNumber) { mutableListOf() }.add(PaVariantMatch(cardId, variantId, variant.variantType))
                     }
                     // Keep card info for enrichment (first variant wins)
                     if (cardName !in cardInfoMap) {

@@ -85,38 +85,79 @@ class PiltoverArchiveService @Inject constructor(
             "vendetta-promo-cards" to "VEN",
             "riftbound-promos" to "WRLD25",
         )
-        // Case-insensitive PA variant lookup
+        // Case-insensitive PA variant lookup: variantNumber (lowercase) → List of PaVariantMatch
         val paVariantByLower = paVariantMap.mapKeys { (k, _) -> k.lowercase() }
         
-        // Map productId → (cardId, variantId) for exact printing match
+        // Determine if a CN expansion is a promo set
+        val promoExpansions = setOf(
+            "origins-promo-cards", "spiritforged-promo-cards",
+            "unleashed-promo-cards", "vendetta-promo-cards", "riftbound-promos",
+        )
+        
+        // Map productId → (cardId, variantId) for exact printing match (push direction)
         val productToPaIds = mutableMapOf<Long, Pair<String, String>>()
         var unmatchedCount = 0
-        // Build variantId → printingSlug map for exact deck matching (ALL printings, not just first per slug)
+        // Build variantId → printingSlug map for exact deck matching (pull direction)
+        // This must cover ALL PA variants, not just the best match per CN printing
         val variantIdToPrintingSlug = mutableMapOf<String, String>()
         // Build variantNumber → printingSlug map for legend matching via PaDeckLegend.variantNumber
         val variantNumberToPrintingSlug = mutableMapOf<String, String>()
+        
+        // Group CN printings by variantNumber to match against PA variants
+        val cnPrintingsByVariantNumber = mutableMapOf<String, MutableList<com.riftcompanion.app.data.db.CardPrintingEntity>>()
         for (printing in printings) {
             val prefix = expansionToPrefix[printing.expansionSlug]
             val printNumber = printing.printNumber
             if (prefix != null && !printNumber.isNullOrBlank()) {
-                // CN uses 's' suffix for signed cards (e.g. 299s), PA uses '*' (e.g. 299*)
                 val paPrintNumber = if (printNumber.endsWith("s") && printNumber.length > 1 && printNumber[printNumber.length - 2].isDigit()) {
                     printNumber.dropLast(1) + "*"
                 } else {
                     printNumber
                 }
                 val variantNumber = "$prefix-$paPrintNumber"
-                val paIds = paVariantByLower[variantNumber.lowercase()]
-                if (paIds != null) {
-                    productToPaIds[printing.productID] = paIds
-                    // Map ONLY variantId to printing slug (cardId is shared across printings)
-                    variantIdToPrintingSlug[paIds.second] = printing.nameSlug
-                    // Map variantNumber to printing slug for legend matching
-                    variantNumberToPrintingSlug[variantNumber.lowercase()] = printing.nameSlug
+                cnPrintingsByVariantNumber.getOrPut(variantNumber.lowercase()) { mutableListOf() }.add(printing)
+            }
+        }
+        
+        for ((variantNumberLower, cnPrintings) in cnPrintingsByVariantNumber) {
+            val paMatches = paVariantByLower[variantNumberLower]
+            if (paMatches.isNullOrEmpty()) {
+                unmatchedCount += cnPrintings.size
+                continue
+            }
+            
+            // Match each CN printing to the best PA variant
+            for (cnPrinting in cnPrintings) {
+                val isCnPromo = cnPrinting.expansionSlug in promoExpansions
+                val bestPaMatch = if (paMatches.size == 1) {
+                    paMatches.first()
+                } else if (isCnPromo) {
+                    paMatches.firstOrNull { it.variantType != null && it.variantType != "Standard" }
+                        ?: paMatches.first()
                 } else {
-                    unmatchedCount++
+                    paMatches.firstOrNull { it.variantType == null || it.variantType == "Standard" }
+                        ?: paMatches.first()
+                }
+                val paIds = bestPaMatch.cardId to bestPaMatch.variantId
+                productToPaIds[cnPrinting.productID] = paIds
+                variantIdToPrintingSlug[bestPaMatch.variantId] = cnPrinting.nameSlug
+            }
+            
+            // Also map ALL remaining PA variantIds to the closest CN printing slug
+            // so deck pull can find them even if the PA variant doesn't have an exact CN match
+            for (paMatch in paMatches) {
+                if (paMatch.variantId !in variantIdToPrintingSlug) {
+                    // Pick the CN printing that best matches this PA variant type
+                    val isPaPromo = paMatch.variantType != null && paMatch.variantType != "Standard"
+                    val bestCn = cnPrintings.firstOrNull { (it.expansionSlug in promoExpansions) == isPaPromo }
+                        ?: cnPrintings.first()
+                    variantIdToPrintingSlug[paMatch.variantId] = bestCn.nameSlug
                 }
             }
+            
+            // Map variantNumber to the standard CN printing slug for legend matching
+            val standardCn = cnPrintings.firstOrNull { it.expansionSlug !in promoExpansions } ?: cnPrintings.first()
+            variantNumberToPrintingSlug[variantNumberLower] = standardCn.nameSlug
         }
         
         // Also build nameSlug → (cardId, variantId) for deck sync (use first matched printing per slug)
