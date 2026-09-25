@@ -418,7 +418,6 @@ class RiftRepository @Inject constructor(
             )
 
             var allUpdates = mutableListOf<InventoryBulkMoveItem>()
-            var allDeletions = mutableListOf<Pair<String, Int>>() // inventoryID to quantity
             var addedQuantity = 0
             var removedQuantity = 0
             var movedQuantity = 0
@@ -528,7 +527,8 @@ class RiftRepository @Inject constructor(
                         if (remaining <= 0 || mutableLines[lineIdx].quantity <= 0 || mutableLines[lineIdx].locationKey != sourceKey) continue
                         val quantity = minOf(remaining, mutableLines[lineIdx].quantity)
                         if (quantity == mutableLines[lineIdx].quantity) {
-                            allDeletions.add(mutableLines[lineIdx].inventoryID to quantity)
+                            // Full line removal → use bulk update with negative adjustment to zero it out
+                            allUpdates.add(InventoryBulkMoveItem(inventoryID = mutableLines[lineIdx].inventoryID, quantityAdjustment = -quantity))
                             mutableLines[lineIdx].quantity = 0
                         } else {
                             allUpdates.add(InventoryBulkMoveItem(inventoryID = mutableLines[lineIdx].inventoryID, quantityAdjustment = -quantity))
@@ -545,13 +545,12 @@ class RiftRepository @Inject constructor(
                 }
             }
 
-            if (allUpdates.isEmpty() && allDeletions.isEmpty()) {
+            if (allUpdates.isEmpty()) {
                 throw Exception("No inventory quantity changes.")
             }
 
             // Batch updates (max 200 per batch, no duplicate inventory IDs per batch)
             var completedUpdates = 0
-            var completedDeletions = 0
             val planId = java.util.UUID.randomUUID().toString()
 
             var pending = allUpdates
@@ -580,11 +579,6 @@ class RiftRepository @Inject constructor(
                 batchIndex++
             }
 
-            for ((inventoryID, _) in allDeletions) {
-                cardNexusClient.deleteInventoryLine(inventoryID).getOrThrow()
-                completedDeletions++
-            }
-
             // Refresh local DB after writes
             val refreshedLines = cardNexusClient.fetchAllInventoryLines().getOrThrow()
             val refreshedLocations = cardNexusClient.fetchLocations().getOrThrow()
@@ -594,7 +588,7 @@ class RiftRepository @Inject constructor(
             InventoryQuantityEditResult(
                 editedCardCount = edits.size,
                 bulkUpdateCount = completedUpdates,
-                deletedLineCount = completedDeletions,
+                deletedLineCount = 0,
                 addedQuantity = addedQuantity,
                 removedQuantity = removedQuantity,
                 movedQuantity = movedQuantity,
