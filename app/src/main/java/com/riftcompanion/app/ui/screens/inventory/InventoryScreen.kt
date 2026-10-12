@@ -512,7 +512,7 @@ private fun InventoryCardEditor(
     }
 
     if (showAddLocationDialog) {
-        AddLocationDialog(
+        com.riftcompanion.app.ui.components.AddLocationDialog(
             cardName = card.identity.displayName,
             availableLocations = addableLocations,
             onDismiss = { showAddLocationDialog = false },
@@ -522,119 +522,6 @@ private fun InventoryCardEditor(
             },
         )
     }
-}
-
-@Composable
-private fun AddLocationDialog(
-    cardName: String,
-    availableLocations: List<LocationPolicy>,
-    onDismiss: () -> Unit,
-    onConfirm: (locationName: String, quantity: Int) -> Unit,
-) {
-    var selectedLocation by remember { mutableStateOf(availableLocations.firstOrNull()) }
-    var quantityText by remember { mutableStateOf("1") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add to location") },
-        text = {
-            Column {
-                Text(
-                    text = cardName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(12.dp))
-
-                // Location selector
-                Text(
-                    text = "Location",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(4.dp))
-                availableLocations.forEach { location ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                if (selectedLocation == location)
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                            )
-                            .clickable { selectedLocation = location }
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
-                            .semantics {
-                                contentDescription = if (selectedLocation == location)
-                                    "${location.displayName}, selected" else location.displayName
-                            },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    location.color?.let { com.riftcompanion.app.ui.theme.parseColor(it) }
-                                        ?: MaterialTheme.colorScheme.outline
-                                ),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = location.displayName,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f),
-                        )
-                        if (selectedLocation == location) {
-                            Icon(
-                                Icons.Default.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(4.dp))
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                // Quantity input
-                Text(
-                    text = "Quantity",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(4.dp))
-                OutlinedTextField(
-                    value = quantityText,
-                    onValueChange = { value ->
-                        quantityText = value.filter { it.isDigit() }.take(3)
-                    },
-                    singleLine = true,
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            androidx.compose.material3.Button(
-                onClick = {
-                    val qty = quantityText.toIntOrNull() ?: 0
-                    if (qty > 0 && selectedLocation != null) {
-                        onConfirm(selectedLocation!!.name, qty)
-                    }
-                },
-                enabled = selectedLocation != null && (quantityText.toIntOrNull() ?: 0) > 0,
-            ) { Text("Add") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-    )
 }
 
 @Composable
