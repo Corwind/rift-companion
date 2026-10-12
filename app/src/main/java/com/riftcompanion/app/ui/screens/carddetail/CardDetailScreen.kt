@@ -514,7 +514,7 @@ private fun LocationSection(
     }
 
     if (showAddLocationDialog) {
-        AddLocationDialog(
+        com.riftcompanion.app.ui.components.AddLocationDialog(
             cardName = cardLocations.firstOrNull()?.displayName ?: "Card",
             availableLocations = addableLocations,
             onDismiss = { showAddLocationDialog = false },
@@ -704,83 +704,3 @@ private fun MetadataRow(title: String, value: String?) {
     }
 }
 
-@Composable
-private fun AddLocationDialog(
-    cardName: String,
-    availableLocations: List<LocationPolicy>,
-    onDismiss: () -> Unit,
-    onConfirm: (String, Int) -> Unit,
-) {
-    var selectedLocation by remember { mutableStateOf(availableLocations.firstOrNull()) }
-    var quantityText by remember { mutableStateOf("1") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add to location") },
-        text = {
-            Column {
-                Text(
-                    text = cardName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(12.dp))
-
-                Text(
-                    text = "Location",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(4.dp))
-                availableLocations.forEach { location ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { selectedLocation = location }
-                            .padding(vertical = 6.dp, horizontal = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        androidx.compose.material3.RadioButton(
-                            selected = selectedLocation == location,
-                            onClick = { selectedLocation = location },
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = location.displayName,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-
-                Text(
-                    text = "Quantity",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(4.dp))
-                androidx.compose.material3.OutlinedTextField(
-                    value = quantityText,
-                    onValueChange = { quantityText = it.filter { c -> c.isDigit() } },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    val loc = selectedLocation
-                    val qty = quantityText.toIntOrNull() ?: 0
-                    if (loc != null && qty > 0) {
-                        onConfirm(loc.name, qty)
-                    }
-                },
-                enabled = selectedLocation != null && (quantityText.toIntOrNull() ?: 0) > 0,
-            ) { Text("Add") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
-}
