@@ -90,4 +90,69 @@ class CardIdentityTest {
         assertTrue(searchText.contains("Chaos"))
         assertTrue(searchText.contains("Champion"))
     }
+
+    // ── PA enrichment fields ──────────────────────────────────────────
+
+    @Test
+    fun `power field is preserved from PA enrichment`() {
+        val identity = CardIdentity(
+            nameSlug = "irelia",
+            displayName = "Irelia",
+            power = 5,
+        )
+        assertEquals(5, identity.power)
+    }
+
+    @Test
+    fun `power defaults to null when not enriched`() {
+        val identity = CardIdentity(
+            nameSlug = "some-card",
+            displayName = "Some Card",
+        )
+        assertEquals(null, identity.power)
+    }
+
+    @Test
+    fun `mightBonus field is preserved from PA enrichment`() {
+        val identity = CardIdentity(
+            nameSlug = "unit-card",
+            displayName = "Unit Card",
+            might = 3,
+            mightBonus = 2,
+        )
+        assertEquals(3, identity.might)
+        assertEquals(2, identity.mightBonus)
+    }
+
+    @Test
+    fun `maxCopies field is preserved from PA enrichment`() {
+        val identity = CardIdentity(
+            nameSlug = "limited-card",
+            displayName = "Limited Card",
+            maxCopies = 1,
+        )
+        assertEquals(1, identity.maxCopies)
+    }
+
+    @Test
+    fun `banEffectiveDate field is preserved from PA enrichment`() {
+        val identity = CardIdentity(
+            nameSlug = "banned-card",
+            displayName = "Banned Card",
+            banEffectiveDate = "2025-01-15",
+        )
+        assertEquals("2025-01-15", identity.banEffectiveDate)
+    }
+
+    @Test
+    fun `all PA enrichment fields default to null when not set`() {
+        val identity = CardIdentity(
+            nameSlug = "basic-card",
+            displayName = "Basic Card",
+        )
+        assertEquals(null, identity.power)
+        assertEquals(null, identity.mightBonus)
+        assertEquals(null, identity.maxCopies)
+        assertEquals(null, identity.banEffectiveDate)
+    }
 }
